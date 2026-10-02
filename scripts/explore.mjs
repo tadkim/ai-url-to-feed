@@ -7,13 +7,12 @@
 //   매번 첫 화면부터 단계를 다시 실행한다.
 // 출력(JSON): 주소·제목, 스크린샷 경로, 누를 수 있는 요소(글자, 역할, 바로 쓸 수 있는 선택자),
 //   돌고 있는 애니메이션(이름·주기 — 루프 길이를 정할 때 쓴다), GIF 이미지, 막힌 쓰기 요청 수
-//   스크린샷은 저장소 밖 임시 폴더에 둔다 (편집 범위 검사 대상이 아니다). Read로 열어 본다.
+//   스크린샷은 .cache/explore/<project>/에 둔다 (git·편집 범위 검사에서 빠진다). Read로 열어 본다.
 // 종료 코드: 0 정상, 1 단계 오류(step_error), 2 실행 오류
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { loadRules, assertProject, projectConf } from './lib.mjs';
+import { ROOT, loadRules, assertProject, projectConf } from './lib.mjs';
 import { assertTarget, applyContext, runSteps } from './browser.mjs';
 
 async function main() {
@@ -24,7 +23,7 @@ async function main() {
   const conf = projectConf(rules, project);
   const steps = opt('--steps') ? JSON.parse(opt('--steps')) : [];
   const name = (opt('--name') ?? `step-${steps.length}`).replace(/[^\w-]/g, '_');
-  const outDir = path.join(os.tmpdir(), `harness-explore-${project}`);
+  const outDir = path.join(ROOT, '.cache', 'explore', project);   // 저장소 안이어야 Claude가 Read로 열 수 있다. .cache/는 git·편집 범위 검사에서 빠진다
   fs.mkdirSync(outDir, { recursive: true });
   await assertTarget(conf);
 

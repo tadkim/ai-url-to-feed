@@ -1,4 +1,5 @@
 node_modules/
+.cache/
 .DS_Store
 # 실행 결과·상태는 프로젝트마다 이 컴퓨터에만 둔다 (클라이언트 작업물이 섞인다)
 runs/

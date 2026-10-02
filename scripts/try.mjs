@@ -1,16 +1,15 @@
 #!/usr/bin/env node
-// planner가 시나리오를 미리 돌려 본다. record.mjs와 같은 엔진·언어·쓰기 차단으로 실행하되 배율 1로 찍어 저장소 밖 임시 폴더에 둔다.
+// planner가 시나리오를 미리 돌려 본다. record.mjs와 같은 엔진·언어·쓰기 차단으로 실행하되 배율 1로 찍어 .cache/try/<project>/에 둔다 (git·편집 범위 검사에서 빠진다).
 // 사용: node scripts/try.mjs <project> <recording 이름>
 //   runs/<project>/plan/<이름>.scenario.mjs를 실행한다. plan.json에 아직 없어도 된다.
 // 출력(JSON): 길이, 컨택트 시트 경로(1초 간격 + 끝 프레임, Read로 본다), 영상 경로, 장면 전환 시점, 막힌 쓰기 요청, 오류
 //   대기 조건이 끝나지 않거나 선택자가 틀리면 error에 나온다. 녹화(P2)로 넘기기 전에 여기서 먼저 잡는다.
 // 종료 코드: 0 끝까지 실행, 1 시나리오 오류, 2 실행 오류
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { record } from 'walkthrough-recorder';
-import { loadRules, assertProject, projectConf, loadContext, scenarioErrors, planDir, exists, probe, inspectVideo } from './lib.mjs';
+import { ROOT, loadRules, assertProject, projectConf, loadContext, scenarioErrors, planDir, exists, probe, inspectVideo } from './lib.mjs';
 import { assertTarget, applyContext } from './browser.mjs';
 
 async function main() {
@@ -24,7 +23,7 @@ async function main() {
   await assertTarget(conf);
 
   const rec = rules.record;
-  const dir = path.join(os.tmpdir(), `harness-try-${project}`);
+  const dir = path.join(ROOT, '.cache', 'try', project);   // 저장소 안이어야 Claude가 Read로 열 수 있다. .cache/는 git·편집 범위 검사에서 빠진다
   fs.mkdirSync(dir, { recursive: true });
   const counts = { seen: 0, blocked: 0 };
   const log = console.log;

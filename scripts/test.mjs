@@ -179,6 +179,9 @@ eq(status().next, 'P4', '승인 뒤 편집값이 바뀌면 다시');
 node('export.mjs', P); node('judge.mjs', P, '--phase', 'P4');
 eq(status().next, 'APPROVAL_FINAL', '다시 승인받는다');
 eq(node('run.mjs', 'reject', P, 'final', '--note', '더 빠르게').json?.next, 'P3', '완성본 거절 → P3');
+node('run.mjs', 'begin', P, 'P3'); node('run.mjs', 'end', P, 'P3');
+eq(status().next, 'STOP', '거절 뒤 editor가 아무것도 바꾸지 않으면 승인 대기로 넘기지 않는다');
+eq(node('run.mjs', 'unblock', P).json?.next, 'P3', '계속 진행해 → editor 다시');
 
 // 편집 범위
 node('run.mjs', 'begin', P, 'P3');

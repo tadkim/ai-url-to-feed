@@ -4,12 +4,11 @@
 //   node scripts/frames.mjs <project> <recording> --at 6.5,8.8,9.2            정한 시점들
 //   node scripts/frames.mjs <project> <recording> --from 12 --to 15 [--every 0.25]   구간을 일정 간격으로
 // 출력(JSON): image(이어 붙인 PNG 경로), times(칸마다 시점, 왼쪽 위부터), duration(녹화본 길이)
-//   저장소 밖 임시 폴더에만 쓴다 (편집 범위 검사 대상이 아니다).
+//   .cache/frames/<project>/에만 쓴다 (git·편집 범위 검사에서 빠진다).
 // 종료 코드: 0 정상, 2 실행 오류
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { loadRules, assertProject, derivedPath, runPath, readIf, ff } from './lib.mjs';
+import { ROOT, loadRules, assertProject, derivedPath, runPath, readIf, ff } from './lib.mjs';
 
 function main() {
   const [project, name, ...args] = process.argv.slice(2);
@@ -31,7 +30,7 @@ function main() {
   times = times.filter((t) => Number.isFinite(t) && t >= 0).map((t) => Math.min(t, Math.max(0, rec.duration - 0.05)));
   if (!times.length) throw new Error('시점이 없다 — --at 또는 --from/--to를 준다');
 
-  const dir = path.join(os.tmpdir(), `harness-frames-${project}`);
+  const dir = path.join(ROOT, '.cache', 'frames', project);   // 저장소 안이어야 Claude가 Read로 열 수 있다. .cache/는 git·편집 범위 검사에서 빠진다
   fs.mkdirSync(dir, { recursive: true });
   const parts = times.map((t, i) => {
     const f = path.join(dir, `f${i}.png`);

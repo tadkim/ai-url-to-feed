@@ -17,7 +17,7 @@ import { spawnSync } from 'node:child_process';
 import {
   ROOT, RUNS, readJson, readIf, exists, writeJson, now, loadRules, assertProject, derivedPath, loadContext,
   gatesFor, runGates, isHuman, planHash, recordHash, finalHash, editsHash, exportHash, assetHash, assetFile,
-  loadState, saveState, appendLog, readLog, scopeDir, editsErrors, toolProblems,
+  loadState, saveState, appendLog, readLog, scopeDir, editsErrors, toolProblems, planContentHash,
 } from './lib.mjs';
 
 const [cmd, project, phaseArg] = process.argv.slice(2);
@@ -43,6 +43,11 @@ export function status(rules, project) {
   if (!ctx.plan || !st.done.P1 || !after(st.done.P1, st.plan_rejected_at)) {
     return { next: 'P1', todo: 'agent', reason: st.plan_rejected_at && !after(st.done.P1, st.plan_rejected_at) ? '촬영 계획 거절 — 사람 요청을 planner에게 넘긴다' : 'P1 완료 기록 없음', notes: st.plan_notes.slice(-1) };
   }
+  // 거절 뒤 planner가 돌았는데 계획·시나리오가 그대로면 요청이 반영되지 않은 것이다 — 승인 대기로 넘기지 않는다
+  if (st.plan_rejected_at && st.plan_rejected_hash === planContentHash(rules, project)) {
+    if (after(st.unblocked_at, st.done.P1)) return { next: 'P1', todo: 'agent', reason: '촬영 계획 거절 — 사람 요청을 planner에게 다시 넘긴다', notes: st.plan_notes.slice(-1) };
+    return { next: 'STOP', reason: 'planner가 거절 요청을 반영하지 못했다 (계획·시나리오가 거절 때와 같다). 요청을 더 구체적으로 다시 거절하거나 "계속 진행해"', notes: st.plan_notes.slice(-1) };
+  }
   let f = failing('P1');
   if (f.length) return { next: 'P1', todo: 'agent', reason: 'P1 게이트 FAIL', failing: f };
 
@@ -57,7 +62,10 @@ export function status(rules, project) {
   // P3 편집값
   if (st.final_rejects > rules.retry.final_reject) return { next: 'STOP', reason: `완성본 거절 ${st.final_rejects}회 — retry.final_reject(${rules.retry.final_reject}) 초과` };
   const eh = editsHash(rules, project);
-  const rejected = st.final_rejected_at && st.final_rejected_edits === eh && !after(st.done.P3, st.final_rejected_at);
+  const unchanged = st.final_rejected_at && st.final_rejected_edits === eh;
+  const rejected = unchanged && (!after(st.done.P3, st.final_rejected_at) || after(st.unblocked_at, st.done.P3));
+  // 거절 뒤 editor가 돌았는데 편집값이 그대로면 요청이 반영되지 않은 것이다 — 완성본 승인 대기로 넘기지 않는다
+  if (unchanged && !rejected) return { next: 'STOP', reason: 'editor가 거절 요청을 반영하지 못했다 (edits.json이 거절 때와 같다). 검토 화면에서 직접 고치거나 "계속 진행해"', notes: st.final_notes.slice(-1) };
   if (!ctx.edits || !after(st.done.P3, st.approved_plan_at) || rejected) {
     return { next: 'P3', todo: 'agent', reason: rejected ? '완성본 거절 — 사람 요청을 editor에게 넘긴다' : '승인 1 이후 P3 완료 기록 없음', notes: rejected ? st.final_notes.slice(-1) : undefined };
   }
@@ -181,6 +189,7 @@ function reject(rules) {
   if (phaseArg === 'plan') {
     st.plan_rejects += 1;
     st.plan_rejected_at = at;
+    st.plan_rejected_hash = planContentHash(rules, project);
     st.plan_notes = [...st.plan_notes, { at, note }];
     fs.rmSync(derivedPath(rules, project, 'approval_plan'), { force: true });
   } else if (phaseArg === 'final') {

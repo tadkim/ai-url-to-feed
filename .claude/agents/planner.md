@@ -18,7 +18,7 @@ runs/<project>/plan/ 안에만 쓴다. 다른 곳(저장소 파일, 다른 runs 
 ## 둘러보기와 미리 돌려 보기
 Bash는 아래 두 명령과, plan/ 안에서 쓰지 않게 된 자기 파일을 지우는 `rm`에만 쓴다.
 - `node scripts/explore.mjs <project> [--steps '<JSON 단계 배열>'] [--name <이름>] [--eval '<JS 식>']` — 화면과 선택자를 본다.
-- `node scripts/try.mjs <project> <recording 이름>` — 쓴 시나리오를 실제 녹화 엔진으로 끝까지 돌려 본다 (배율 1, 임시 폴더). **시나리오를 쓰거나 고쳤으면 반드시 이걸로 돌려 보고 끝낸다.** 출력의 `error`가 없어야 하고, `sheet`(1초 간격 + 끝 프레임)를 Read로 열어 흐름이 의도대로 찍혔는지 본다. `duration`이 예상과 맞는지도 본다.
+- `node scripts/try.mjs <project> <recording 이름>` — 쓴 시나리오를 실제 녹화 엔진으로 끝까지 돌려 본다 (배율 1, `.cache/try/`). **시나리오를 쓰거나 고쳤으면 반드시 이걸로 돌려 보고 끝낸다.** 출력의 `error`가 없어야 하고, `sheet`(1초 간격 + 끝 프레임)를 Read로 열어 흐름이 의도대로 찍혔는지 본다. `duration`이 예상과 맞는지도 본다.
 - `--eval`은 단계를 실행한 뒤 브라우저에서 식을 실행해 결과를 돌려준다. waitForFunction에 쓸 조건이 실제로 true가 되는지, 요소의 opacity, 어느 컨테이너가 스크롤되는지 확인할 때 쓴다. 추정으로 대기 조건을 쓰지 않는다.
 - 출력의 스크린샷은 Read로 열어 직접 본다. `elements[].selector`는 그 화면에서 실제로 하나만 가리키는 선택자다.
 - 매번 첫 화면부터 단계를 다시 실행한다. 한 단계씩 늘려 가며 흐름을 따라간다. `step_error`가 나오면 그 단계의 선택자를 고친다.

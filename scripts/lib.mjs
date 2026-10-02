@@ -195,6 +195,9 @@ export function recordHash(rules, project) {
   return sha(JSON.stringify(plan.recordings ?? null), ...scenarioFiles(rules, project).flatMap((f) => [f, readText(path.join(dir, f))]));
 }
 
+// 계획 내용 해시: plan.json + 시나리오 (거절 뒤 planner가 실제로 고쳤는지 본다)
+export const planContentHash = (rules, project) => sha(readIf(phasePath(rules, project, 'P1')), recordHash(rules, project));
+
 // 승인 1 해시: plan.json + 시나리오 + 녹화본. 이후 하나라도 바뀌면 승인이 무효가 된다
 export function planHash(rules, project) {
   const plan = readIf(phasePath(rules, project, 'P1'));
@@ -235,7 +238,7 @@ const stateFile = (rules, project) => path.join(stateDir(rules), 'state', `${pro
 
 export function loadState(rules, project) {
   return {
-    plan_rejects: 0, plan_notes: [], plan_rejected_at: null,
+    plan_rejects: 0, plan_notes: [], plan_rejected_at: null, plan_rejected_hash: null,
     final_rejects: 0, final_notes: [], final_rejected_at: null, final_rejected_edits: null,
     approved_plan_at: null, approved_final_at: null, unblocked_at: null, p3_invalid_runs: 0, done: {},
     ...(readIf(stateFile(rules, project), true) ?? {}),
