@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // README의 미리보기 GIF 두 개를 만든다. 끝까지 진행한(export/가 있는) 프로젝트 1개가 필요하다.
-// 사용: node docs/make-demo.mjs <project>
+// 사용: node scripts/make-demo.mjs <project>
 // 출력:
-//   docs/hero.gif   — 맨 위: "URL만 넣으면 → 인스타그램 3:4 영상·이미지"
-//   docs/editor.gif — 아래: 세부 수정 도구 (에셋 편집 화면 조작)
+//   docs/assets/hero.gif   — 맨 위: "URL만 넣으면 → 인스타그램 3:4 영상·이미지"
+//   docs/assets/editor.gif — 아래: 세부 수정 도구 (에셋 편집 화면 조작)
 //   같은 이름의 .mp4도 함께 만든다 (선명한 버전).
 // 두 장면 모두 walkthrough-recorder로 실제 화면을 녹화한다. 편집 화면은 runs/<project>를 임시 폴더에 복사해 띄운다 (실제 편집값은 건드리지 않는다).
 import fs from 'node:fs';
@@ -12,14 +12,14 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { record } from 'walkthrough-recorder';
-import { ROOT, RUNS, loadRules, assertProject, projectConf, ff, probe } from '../scripts/lib.mjs';
+import { ROOT, RUNS, loadRules, assertProject, projectConf, ff, probe } from './lib.mjs';
 
 const project = process.argv[2];
 const rules = loadRules();
 assertProject(rules, project);
 const conf = projectConf(rules, project);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-demo-'));
-const OUT = path.join(ROOT, 'docs');
+const OUT = path.join(ROOT, 'docs', 'assets');
 const src = path.join(RUNS, project);
 const exp = JSON.parse(fs.readFileSync(path.join(src, 'export', 'manifest.json'), 'utf8'));
 const log = (...a) => console.error('▶', ...a);
