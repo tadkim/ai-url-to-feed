@@ -19,13 +19,15 @@ tools: Read, Write, Edit, Bash
 runs/<project>/edit/edits.json 1개만 쓴다.
 
 ## 프레임 확인
-Bash는 아래처럼 녹화본에서 프레임을 뽑아 임시 폴더에 두는 데만 쓴다 (저장소 안에 쓰지 않는다). 뽑은 PNG는 Read로 본다.
+Bash는 `node scripts/frames.mjs`에만 쓴다 (ffmpeg를 직접 부르지 않는다 — 처음 받은 저장소에서는 허용되어 있지 않다).
+출력 JSON의 `image`를 Read로 열어 본다. 칸은 왼쪽 위부터 `times` 순서다.
 ```bash
-# 전환 구간 정밀 확인 (0.25초 간격, 12.5초부터 3초)
-ffmpeg -v error -y -ss 12.5 -t 3.0 -i runs/<project>/raw/<이름>.mp4 -vf "fps=4,scale=160:-1,tile=6x2:padding=3:color=black" -frames:v 1 "$TMPDIR/fine.png"
-# 한 시점의 프레임
-ffmpeg -v error -y -ss 7.4 -i runs/<project>/raw/<이름>.mp4 -frames:v 1 -vf scale=360:-1 "$TMPDIR/at.png"
+# 정한 시점들 — 이미지 추출 시점, 구간 시작·끝 후보를 고를 때
+node scripts/frames.mjs <project> <녹화 이름> --at 6.5,8.8,9.2
+# 구간을 0.25초 간격으로 — 전환이 끝나는 순간, 페이드 경계를 찾을 때
+node scripts/frames.mjs <project> <녹화 이름> --from 12 --to 15 --every 0.25
 ```
+1초 간격 컨택트 시트만 보고 시점을 정하지 않는다. 이미지 추출 시점과 영상 구간의 시작·끝은 반드시 frames.mjs로 그 순간을 보고 정한다 (컨택트 시트만 보고 정했다가 "4개 목록" 대신 3개일 때, "Completed 필터" 대신 Active 화면을 뽑은 일이 있다).
 
 ## edits.json
 ```json

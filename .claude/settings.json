@@ -11,7 +11,9 @@
       "Bash(node scripts/explore.mjs *)",
       "Bash(node scripts/try.mjs *)",
       "Bash(node scripts/record.mjs *)",
-      "Bash(node scripts/export.mjs *)"
+      "Bash(node scripts/export.mjs *)",
+      "Bash(node scripts/frames.mjs *)",
+      "Bash(node scripts/review.mjs *)"
     ]
   }
 }
