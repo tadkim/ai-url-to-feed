@@ -1,19 +1,22 @@
 # 웹 콘텐츠 포트폴리오 에셋 하네스
 
-**웹사이트 주소를 넣으면, 인스타그램 게시물용 영상·이미지 파일이 나와요.**
+**URL만 넣으면, 인스타그램에 바로 올릴 수 있는 3:4 영상·이미지가 나와요.**
 
-![미리보기: 준비 → 말로 시작 → 촬영 계획 승인 → 편집·내보내기 → 결과](docs/demo.gif)
+![URL 입력 → 인스타그램 3:4 영상·이미지 5개](docs/hero.gif)
 
-<sub>테스트용 예시 사이트로 만든 1분 미리보기 · 선명한 버전 [docs/demo.mp4](docs/demo.mp4)</sub>
+- **페이지마다 동작 흐름을 직접 캡처하지 않아도 돼요.** AI가 사이트를 둘러보고 주요 흐름을 녹화해요.
+- **캡처한 뒤 배경색·배치를 다시 작업하지 않아도 돼요.** 1080×1440 게시물 규격으로 맞춰 나와요.
+
+<sub>예시: [TodoMVC](https://todomvc.com/examples/react/dist/) 주소만 넣고 만든 결과 · 선명한 버전 [hero.mp4](docs/hero.mp4)</sub>
 
 ## 이 문서를 따라 하면
 
 웹사이트 1개로 인스타그램 게시물 1개 분량의 파일(1080×1440 영상·이미지 5~10개)을 만들어요.
-AI가 녹화하고, 사람은 두 번 확인해서 승인해요. 준비를 마친 뒤 한 프로젝트에 30분~1시간 걸려요.
+AI가 녹화하고, 사람은 두 번 확인해서 승인해요. AI 작업은 한 프로젝트에 5~25분이고, 여기에 확인하는 시간이 더해져요.
 
 | 필요한 것 | 입력 | 결과 |
 |---|---|---|
-| macOS · node 22.2+ · ffmpeg · [Claude Code](https://claude.com/claude-code) | 웹사이트 주소 (내 컴퓨터의 개발 서버면 페이지 제목도) | `runs/<프로젝트>/export/`의 `01.mp4`, `02.png` … |
+| macOS · Node.js 22.2+ · ffmpeg · [Claude Code](https://claude.com/claude-code) | 웹사이트 주소 (내 컴퓨터의 개발 서버면 페이지 제목도) | `runs/<프로젝트>/export/`의 `01.mp4`, `02.png` … |
 
 ## 먼저 알아 둘 것
 
@@ -45,14 +48,38 @@ flowchart LR
 
 | 단계 | 하는 일 | 입력 | 결과 |
 |---|---|---|---|
-| 1. 준비하기 | 설치하고 검사 | 터미널 명령 3줄 | `86/86 PASS` |
-| 2. 프로젝트 등록하기 | 녹화할 사이트 적기 | `projects.yaml` | 등록된 프로젝트 |
-| 3. 녹화하기 | AI가 장면을 정해 녹화 → 사람이 승인 | `my-project 하네스 시작해줘` | `raw/` 녹화본 |
-| 4. 다듬고 내보내기 | 편집 화면에서 고치고 내보내기 → 승인 | `npm run review -- my-project` | `export/` 게시물 파일 |
+| 0. 미리 설치 | 컴퓨터에 한 번 | Node.js · ffmpeg · Claude Code | |
+| 1. 받기 | 저장소 내려받기 | `git clone` | 폴더 |
+| 2. 설치·검사 | 패키지와 녹화용 브라우저 설치 | 터미널 명령 3줄 | `86/86 PASS` |
+| 3. 프로젝트 등록 | 녹화할 사이트 적기 | `projects.yaml`에 주소 | 등록된 프로젝트 |
+| 4. Claude Code 실행 | 이 폴더에서 열기 | `claude` | 하네스 준비 |
+| 5. 녹화 | AI가 장면을 정해 녹화 → 사람이 승인 | `my-site 하네스 시작해줘` | `raw/` 녹화본 |
+| 6. 다듬기 (선택) | 편집 화면에서 고치고 내보내기 | `npm run review -- my-site` | `export/` 갱신 |
+| 7. 끝내기 | 완성본 승인 | `my-site 완성본 승인` | `export/` 게시물 파일 |
 
-### 1. 준비하기 (처음 한 번)
+### 0. 미리 설치 (컴퓨터에 한 번)
 
-설치하고 검사해요. 녹화 엔진 [walkthrough-recorder](https://github.com/tadkim/walkthrough-recorder)도 함께 설치돼요.
+| 도구 | 설치 |
+|---|---|
+| Node.js 22.2 이상 | [nodejs.org](https://nodejs.org) |
+| ffmpeg | `brew install ffmpeg` (macOS, [Homebrew](https://brew.sh) 필요) |
+| Claude Code | `npm install -g @anthropic-ai/claude-code` → 처음 실행할 때 로그인 |
+
+```bash
+node -v           # v22.2 이상이면 돼요
+ffmpeg -version   # 버전이 나오면 돼요
+```
+
+### 1. 받기
+
+```bash
+git clone https://github.com/tadkim/ai-url-to-feed.git
+cd ai-url-to-feed
+```
+
+### 2. 설치·검사
+
+녹화 엔진 [walkthrough-recorder](https://github.com/tadkim/walkthrough-recorder)도 함께 설치돼요.
 
 ```bash
 npm install
@@ -60,74 +87,111 @@ npx playwright install chromium
 npm test
 ```
 
-마지막 줄이 `86/86 PASS`면 준비가 끝났어요.
+마지막 줄이 `86/86 PASS`면 준비가 끝났어요. 실패하면 메시지에 빠진 항목이 나와요 (아래 "문제 해결").
 
-### 2. 프로젝트 등록하기
+### 3. 프로젝트 등록
 
-예시 파일을 복사해서 녹화할 사이트를 적어요.
+예시 파일을 복사해요.
 
 ```bash
 cp projects.example.yaml projects.yaml
 ```
 
-`projects.yaml`을 열어 `my-project` 부분을 고쳐요.
+`projects.yaml`을 열어 내용을 지우고 녹화할 사이트를 적어요. 배포된 사이트는 주소 한 줄이면 돼요.
 
 ```yaml
 projects:
-  my-project:
-    url: https://example.com   # 사이트 주소. 끝에 "/" 없이
-    title: 예시 사이트          # 그 페이지의 <title>. 다른 사이트를 녹화하는 실수를 막아요
-    target: deployed           # 내 컴퓨터에서 띄운 개발 서버면 local
-    allow_writes: false        # 녹화 중 사이트에 데이터가 저장되지 않게 막아요
+  my-site:                         # 프로젝트 이름 (영문 소문자·숫자·-)
+    url: https://example.com       # 사이트 주소. 끝에 "/" 없이
 ```
 
-| 항목 | 뜻 | 값 |
+필요할 때만 더 적어요.
+
+| 항목 | 언제 | 값 |
 |---|---|---|
-| `url` | 녹화할 사이트 주소 | 끝에 `/` 없이 |
-| `title` | 그 페이지의 `<title>` — 다른 사이트를 녹화하는 실수를 막아요 | 브라우저 탭 제목 그대로. 배포된 사이트는 생략해도 돼요 |
-| `target` | 사이트 종류 | `deployed` 배포된 사이트 · `local` 내 컴퓨터의 개발 서버(먼저 띄워 둬요) |
-| `allow_writes` | 녹화 중 저장 요청 허용 | `false` 막기(기본) · `true` 허용 |
+| `title` | 내 컴퓨터의 개발 서버일 때 (필수) | 그 페이지의 `<title>`. 다른 앱을 녹화하는 실수를 막아요 |
+| `target` | 내 컴퓨터의 개발 서버일 때 | `local` (서버를 먼저 띄워 둬요). 기본은 배포된 사이트 |
+| `allow_writes` | 저장·업로드 장면까지 찍어야 할 때 | `true`. 기본은 저장 요청을 막아요 |
+| `asset_count`, `max_video_seconds` | 에셋 수·영상 길이를 바꿀 때 | `[5, 7]`, `15` |
 
 `projects.yaml`은 git에 올라가지 않아요.
 
-### 3. 녹화하기
+### 4. Claude Code 실행
 
-Claude Code에 이렇게 말해요.
-
-```text
-my-project 하네스 시작해줘
-```
-
-AI가 사이트를 둘러보고 찍을 장면을 정한 뒤 녹화해요. 끝나면 `runs/my-project/raw/`에 녹화본(`.mp4`)과 1초 간격 장면 모음(`.sheet.png`)이 생기고, Claude가 확인을 요청해요.
-
-녹화본을 보고 괜찮으면 승인하고, 바꾸고 싶으면 거절하면서 요청을 적어요.
-
-```text
-my-project 촬영 계획 승인
-my-project 촬영 계획 거절: 버튼 사이 간격을 절반으로, 스크롤은 사람처럼
-```
-
-### 4. 다듬고 내보내기
-
-AI가 구간과 속도를 제안해 파일을 만들면, 편집 화면을 열어 확인해요.
+**반드시 이 폴더 안에서** 실행해요. 그래야 진행 순서(`CLAUDE.md`)와 에이전트가 함께 불러와져요.
 
 ```bash
-npm run review -- my-project
+claude
 ```
 
-브라우저에서 구간·재생 속도·배경색을 고친 뒤 오른쪽 위 **내보내기**를 눌러요. 편집은 자동 저장되지만 **파일에는 내보내기를 눌러야 반영돼요.** 결과가 마음에 들면 Claude Code에 말해요.
+### 5. 녹화
+
+Claude Code에 입력해요.
 
 ```text
-my-project 완성본 승인
+my-site 하네스 시작해줘
 ```
 
-`runs/my-project/export/`의 파일을 순서대로 인스타그램에 올리면 돼요.
+AI가 사이트를 둘러보고 찍을 장면을 정해 녹화해요 (5분 안팎). 끝나면 `runs/my-site/raw/`에 녹화본(`.mp4`)과 1초 간격 장면 모음(`.sheet.png`)이 생기고, Claude가 확인을 요청해요.
+
+```text
+my-site 촬영 계획 승인
+my-site 촬영 계획 거절: 버튼 사이 간격을 더 짧게, 스크롤은 사람처럼
+```
+
+괜찮으면 승인하고, 바꾸고 싶으면 거절하면서 요청을 적어요. 승인하면 AI가 구간·속도를 정해 게시물 파일을 만들고 다시 확인을 요청해요.
+
+### 6. 다듬기 (선택)
+
+그대로 써도 되면 건너뛰어요. 고치고 싶으면 **새 터미널 창**에서 같은 폴더로 가서 편집 화면을 열어요.
+
+```bash
+npm run review -- my-site
+```
+
+브라우저에서 구간·재생 속도·배경색을 고친 뒤 오른쪽 위 **내보내기**를 눌러요. 편집은 자동 저장되지만 **파일에는 내보내기를 눌러야 반영돼요.**
+
+### 7. 끝내기
+
+Claude Code에 입력해요.
+
+```text
+my-site 완성본 승인
+```
+
+`runs/my-site/export/`의 `01.mp4`, `02.png` … 를 순서대로 인스타그램에 올리면 돼요.
+
+<details>
+<summary><b>처음 쓸 때 막힐 수 있는 곳</b></summary>
+
+| 지점 | 내용 |
+|---|---|
+| 4·5단계 | Claude Code가 명령 실행 허락을 물을 수 있어요. 하네스 스크립트는 미리 허용해 두었고, 그 밖의 명령은 한 번씩 물어봐요 |
+| 0단계 | Windows·Linux는 아직 확인 전이에요. Linux는 `npx playwright install --with-deps chromium`과 한글 폰트가 필요할 수 있어요 |
+| 5단계 | 로그인이 필요한 사이트는 아직 찍을 수 없어요 |
+</details>
+
+## 세부 수정 도구
+
+AI가 만든 결과를 그대로 써도 되고, 편집 화면에서 직접 다듬을 수도 있어요.
+
+![편집 화면: 재생 속도 1.5x → 구간 자르기 → 배경색 변경 → 내보내기](docs/editor.gif)
+
+| 고칠 수 있는 것 | 방법 |
+|---|---|
+| 영상 구간 | 아래 타임라인의 파란 구간 양끝을 끌어요 |
+| 재생 속도 | 0.8x · 1.0x · 1.2x · 1.5x · 2.0x 또는 직접 입력 |
+| 배경색·테두리·모서리 | 전체 스타일 탭에서 한 번에 모든 에셋에 적용 |
+| 이미지 장면·화면 수 | 원하는 순간을 고르고, 한 장에 화면 1~3개 |
+| 순서·추가·삭제 | 왼쪽 게시물 순서에서 |
+
+고친 뒤 **내보내기**를 누르면 파일이 다시 만들어지고 자동 검사가 돌아요. <sub>[editor.mp4](docs/editor.mp4)</sub>
 
 ## 다음 단계
 
 | 하고 싶은 것 | 방법 |
 |---|---|
-| 다른 사이트 추가 | `projects.yaml`에 항목을 하나 더 적고 3번부터 해요. 프로젝트마다 따로 진행돼요 |
+| 다른 사이트 추가 | `projects.yaml`에 항목을 하나 더 적고 5번부터 해요. 프로젝트마다 따로 진행돼요 |
 | 에셋 수·영상 길이 바꾸기 | 프로젝트 항목에 `asset_count: [5, 7]`, `max_video_seconds: 15`처럼 적어요 |
 | 규격·검사 기준 바꾸기 | `rules.yaml`을 고친 뒤 `npm test`를 다시 돌려요 |
 
@@ -156,7 +220,14 @@ macOS에서 확인했어요. Windows·Linux는 아직 돌려 보지 않았어요
 <details>
 <summary><b>시간과 비용은 얼마나 드나요?</b></summary>
 
-Claude Code 사용량이 들어요. 예시 프로젝트(영상·이미지 5개)에서 촬영 계획을 세 번 고쳤을 때 AI 작업에 약 33만 토큰, 23분 정도 걸렸어요. 녹화와 내보내기는 각각 1분 안팎이고, 여기에 사람이 확인하는 시간이 더해져요.
+Claude Code 사용량이 들어요. 영상·이미지 5개 기준으로 확인한 값이에요.
+
+| 경우 | AI 작업 시간 | 사용량 |
+|---|---|---|
+| 단순한 사이트, 피드백 없이 바로 승인 | 약 5분 | 약 8만 토큰 |
+| 복잡한 사이트, 촬영 계획을 세 번 고침 | 약 23분 | 약 33만 토큰 |
+
+녹화와 내보내기는 각각 1분 안팎이고, 여기에 사람이 확인하는 시간이 더해져요.
 </details>
 
 <details>
@@ -214,10 +285,10 @@ npx playwright install chromium   # 녹화용 브라우저
 
 **원인**: 거절이나 자동 검사 실패가 `rules.yaml`의 `retry` 횟수를 넘었거나, 실행 환경에 문제가 있어요.
 
-**해결**: 상태를 보고 원인을 고친 뒤 Claude Code에 `my-project 계속 진행해`라고 말해요.
+**해결**: 상태를 보고 원인을 고친 뒤 Claude Code에 `my-site 계속 진행해`라고 말해요.
 
 ```bash
-npm run status -- my-project   # "reason"에 멈춘 이유가 나와요
+npm run status -- my-site   # "reason"에 멈춘 이유가 나와요
 ```
 </details>
 
@@ -261,7 +332,7 @@ npm run status -- my-project   # "reason"에 멈춘 이유가 나와요
 <summary><b>폴더와 파일</b></summary>
 
 ```text
-runs/my-project/          ← 프로젝트마다 하나 (git에 올라가지 않아요)
+runs/my-site/          ← 프로젝트마다 하나 (git에 올라가지 않아요)
 ├── plan/                 🧠 planner   에셋 목록, 녹화 시나리오
 ├── raw/                  ⚙️ 녹화      1080×1920 녹화본, 장면 모음
 ├── edit/edits.json       🧠 editor + 🙋 편집 화면   구간·속도·배경색
@@ -276,7 +347,7 @@ runs/my-project/          ← 프로젝트마다 하나 (git에 올라가지 않
 | `projects.example.yaml` | 프로젝트 등록 예시 |
 | `CLAUDE.md`, `.claude/agents/` | Claude가 따르는 진행 순서, 에이전트 지시문 |
 | `scripts/` | 둘러보기·녹화·내보내기·검사·편집 화면 |
-| `docs/make-demo.mjs` | 미리보기 영상 다시 만들기 (`node docs/make-demo.mjs <프로젝트>`) |
+| `docs/make-demo.mjs` | README의 미리보기 GIF 다시 만들기 (`node docs/make-demo.mjs <프로젝트>`) |
 </details>
 
 ## 라이선스

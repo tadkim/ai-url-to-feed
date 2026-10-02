@@ -1,120 +1,128 @@
 #!/usr/bin/env node
-// README의 미리보기 영상을 만든다. 끝까지 진행한(export/가 있는) 프로젝트 1개가 필요하다.
+// README의 미리보기 GIF 두 개를 만든다. 끝까지 진행한(export/가 있는) 프로젝트 1개가 필요하다.
 // 사용: node docs/make-demo.mjs <project>
-// 출력: docs/demo.mp4 (1280x800), docs/demo.gif (README에 바로 보이는 미리보기)
-//   - 단계 설명 카드는 HTML을 Playwright로 찍는다.
-//   - 에셋 편집 화면은 runs/<project>를 임시 폴더에 복사해 띄우고 walkthrough-recorder로 녹화한다 (실제 편집값은 건드리지 않는다).
-//   - 결과 화면은 export/의 영상을 나란히 놓는다.
+// 출력:
+//   docs/hero.gif   — 맨 위: "URL만 넣으면 → 인스타그램 3:4 영상·이미지"
+//   docs/editor.gif — 아래: 세부 수정 도구 (에셋 편집 화면 조작)
+//   같은 이름의 .mp4도 함께 만든다 (선명한 버전).
+// 두 장면 모두 walkthrough-recorder로 실제 화면을 녹화한다. 편집 화면은 runs/<project>를 임시 폴더에 복사해 띄운다 (실제 편집값은 건드리지 않는다).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { chromium } from 'playwright';
+import { pathToFileURL } from 'node:url';
 import { record } from 'walkthrough-recorder';
-import { ROOT, RUNS, loadRules, assertProject, ff, probe } from '../scripts/lib.mjs';
+import { ROOT, RUNS, loadRules, assertProject, projectConf, ff, probe } from '../scripts/lib.mjs';
 
 const project = process.argv[2];
 const rules = loadRules();
 assertProject(rules, project);
-const W = 1280, H = 800, FPS = 30, PORT = 4468;
+const conf = projectConf(rules, project);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-demo-'));
 const OUT = path.join(ROOT, 'docs');
 const src = path.join(RUNS, project);
-const exportsDir = path.join(src, 'export');
-if (!fs.existsSync(exportsDir)) throw new Error(`export/가 없다: ${exportsDir}`);
+const exp = JSON.parse(fs.readFileSync(path.join(src, 'export', 'manifest.json'), 'utf8'));
 const log = (...a) => console.error('▶', ...a);
 
-// ---- 1. 카드 ----
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-const dataUri = (file) => `data:image/png;base64,${fs.readFileSync(file).toString('base64')}`;
-const STEPS = ['준비·등록', '말로 시작', '촬영 계획 승인', '편집·내보내기'];
-const CSS = `
-  * { box-sizing: border-box; margin: 0; }
-  body { width: ${W}px; height: ${H}px; background: #141517; color: #eceef0; font-family: "Apple SD Gothic Neo", "Pretendard", sans-serif; display: flex; flex-direction: column; padding: 64px 80px; gap: 28px; }
-  .steps { display: flex; gap: 10px; }
-  .steps span { padding: 6px 14px; border-radius: 99px; background: #272a2e; color: #9aa0a8; font-size: 18px; }
-  .steps span.on { background: #3ec7e6; color: #062a33; font-weight: 700; }
-  h1 { font-size: 52px; line-height: 1.25; letter-spacing: -1px; }
-  h1 b { color: #3ec7e6; }
-  p.desc { font-size: 24px; color: #b8bec6; line-height: 1.5; }
-  .body { flex: 1; display: flex; gap: 28px; align-items: stretch; min-height: 0; }
-  .term { flex: 1; background: #0b0c0d; border: 1px solid #33373c; border-radius: 14px; padding: 26px 30px; font: 21px/1.7 ui-monospace, Menlo, monospace; color: #cfd3d8; white-space: pre; }
-  .term .c { color: #5fd08a; } .term .d { color: #6b7178; } .term .k { color: #3ec7e6; }
-  .chat { flex: 1; display: flex; flex-direction: column; gap: 16px; background: #1d1f22; border-radius: 14px; padding: 28px; }
-  .msg { max-width: 82%; padding: 14px 20px; border-radius: 16px; font-size: 22px; line-height: 1.45; }
-  .me { align-self: flex-end; background: #3ec7e6; color: #062a33; font-weight: 700; }
-  .ai { align-self: flex-start; background: #272a2e; }
-  .ai small { display: block; color: #9aa0a8; font-size: 16px; margin-top: 4px; }
-  .label { font-size: 16px; color: #6b7178; }
-  .sheet { flex: 1.4; background: #000; border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  .sheet img { max-width: 100%; max-height: 100%; }
-  .side { flex: 1; display: flex; flex-direction: column; gap: 14px; }
-  .note { background: #1d1f22; border-radius: 14px; padding: 20px 24px; font-size: 20px; line-height: 1.5; color: #b8bec6; }
-  .note b { color: #eceef0; }
-  .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 26px; }
-`;
-const page = (step, inner) => `<style>${CSS}</style>${step ? `<div class="steps">${STEPS.map((s, i) => `<span class="${i + 1 === step ? 'on' : ''}">${i + 1}. ${s}</span>`).join('')}</div>` : ''}${inner}`;
-const recCount = JSON.parse(fs.readFileSync(path.join(src, 'raw', 'manifest.json'), 'utf8')).recordings.filter((r) => !r.error).length;
-const sheet = path.join(src, 'raw', fs.readdirSync(path.join(src, 'raw')).find((f) => f.endsWith('.sheet.png')));
-
-const CARDS = {
-  intro: page(0, `<div class="center">
-    <h1>웹 콘텐츠를 <b>인스타그램 포트폴리오 에셋</b>으로</h1>
-    <p class="desc">Claude Code에 말로 시키면 녹화 → 편집 → 1080×1440 영상·이미지 파일까지.<br>사람은 두 번 확인하고 승인만 해요.</p>
-    <div class="steps">${STEPS.map((s, i) => `<span class="on">${i + 1}. ${s}</span>`).join('')}</div></div>`),
-  step1: page(1, `<h1>1. 설치하고 <b>프로젝트를 등록</b>해요</h1>
-    <div class="body">
-      <div class="term"><span class="d"># 한 번만</span>
-<span class="k">$</span> npm install
-<span class="k">$</span> npx playwright install chromium
-<span class="k">$</span> npm test
-<span class="c">86/86 PASS</span></div>
-      <div class="term"><span class="d"># projects.yaml</span>
-projects:
-  <span class="k">${esc(project)}</span>:
-    url: ${esc(rules.projects[project].url)}
-    title: ${esc(rules.projects[project].title)}
-    target: ${esc(rules.projects[project].target ?? 'deployed')}
-    allow_writes: ${rules.projects[project].allow_writes ? 'true' : 'false'}</div>
-    </div>`),
-  step2: page(2, `<h1>2. Claude Code에 <b>"하네스 시작해줘"</b></h1>
-    <div class="body"><div class="chat">
-      <div class="label">Claude Code 대화 예시</div>
-      <div class="msg me">${esc(project)} 하네스 시작해줘</div>
-      <div class="msg ai">planner가 사이트를 둘러보고 촬영 계획과 녹화 시나리오를 써요<small>scripts/explore.mjs · try.mjs</small></div>
-      <div class="msg ai">녹화 ${recCount}개 완료 · 검사 통과<br>에셋 목록과 장면 모음을 확인하고 승인해 주세요<small>scripts/record.mjs → runs/${esc(project)}/raw/</small></div>
-    </div></div>`),
-  step3: page(3, `<h1>3. 녹화본을 보고 <b>촬영 계획 승인</b></h1>
-    <div class="body">
-      <div class="sheet"><img src="${dataUri(sheet)}"></div>
-      <div class="side">
-        <div class="note"><b>장면 모음(1초 간격)</b>으로 흐름이 끝까지 찍혔는지 확인해요.</div>
-        <div class="note">바꾸고 싶으면 말로 피드백해요.<br><b>"버튼 사이 간격을 절반으로, 스크롤은 사람처럼"</b></div>
-        <div class="chat" style="flex:none"><div class="msg me" style="max-width:100%">${esc(project)} 촬영 계획 승인</div></div>
-      </div>
-    </div>`),
-  step4: page(4, `<div class="center"><h1>4. <b>에셋 편집 화면</b>에서 다듬고 내보내기</h1>
-    <p class="desc">구간 자르기 · 재생 속도 · 배경색을 눈으로 보며 고치고,<br><b style="color:#3ec7e6">내보내기</b>를 눌러야 mp4·png 파일에 반영돼요.</p>
-    <div class="term" style="flex:none;font-size:22px"><span class="k">$</span> npm run review -- ${esc(project)}</div></div>`),
-  result: page(0, `<h1>결과 — <b>runs/${esc(project)}/export/</b></h1><div class="body"></div>`),
-  outro: page(0, `<div class="center"><h1>마음에 들면 <b>"완성본 승인"</b></h1>
-    <p class="desc">자동 검사(크기·길이·빈 화면·배경색)를 통과하고 사람이 승인하면 끝.<br>게시 문구와 업로드는 직접 해요.</p>
-    <div class="chat" style="flex:none;width:640px"><div class="msg me" style="max-width:100%">${esc(project)} 완성본 승인</div></div></div>`),
-};
-
-const browser = await chromium.launch();
-const shot = await browser.newPage({ viewport: { width: W, height: H } });
-const cards = {};
-for (const [name, html] of Object.entries(CARDS)) {
-  await shot.setContent(html);
-  await shot.waitForTimeout(150);
-  cards[name] = path.join(TMP, `${name}.png`);
-  await shot.screenshot({ path: cards[name] });
+// GIF는 README에 바로 보이도록 작게, mp4는 선명하게
+function toGif(mp4, gif, width, fps) {
+  const pal = path.join(TMP, `${path.basename(gif)}.pal.png`);
+  ff('ffmpeg', ['-v', 'error', '-y', '-i', mp4, '-vf', `fps=${fps},scale=${width}:-1:flags=lanczos,palettegen=max_colors=128:stats_mode=diff`, pal]);
+  ff('ffmpeg', ['-v', 'error', '-y', '-i', mp4, '-i', pal, '-lavfi', `fps=${fps},scale=${width}:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`, gif]);
 }
-await browser.close();
-log('카드', Object.keys(cards).length);
+function finish(raw, name, { cut, width, fps }) {
+  const mp4 = path.join(OUT, `${name}.mp4`);
+  const vf = cut ? ['-vf', `select='not(between(t,${cut[0]},${cut[1]}))',setpts=N/FRAME_RATE/TB`] : [];
+  ff('ffmpeg', ['-v', 'error', '-y', '-i', raw, ...vf, '-r', '30', '-c:v', 'libx264', '-crf', '22', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', mp4]);
+  const gif = path.join(OUT, `${name}.gif`);
+  toGif(mp4, gif, width, fps);
+  return { mp4, seconds: probe(mp4).duration, gif, gif_mb: +(fs.statSync(gif).size / 1e6).toFixed(1) };
+}
 
-// ---- 2. 에셋 편집 화면 녹화 (임시 복사본) ----
+// ---- 1. hero: URL 입력 → 안 해도 되는 두 가지 → 결과 게시물 ----
+const W = 1200, H = 680;
+const assets = exp.assets.slice(0, 5).map((a) => ({ ...a, url: pathToFileURL(path.join(src, 'export', a.file)).href }));
+const nVideo = assets.filter((a) => a.type === 'video').length;
+const heroHtml = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; margin: 0; }
+  body { width: ${W}px; height: ${H}px; overflow: hidden; background: #f6f7f9; color: #111; font-family: "Apple SD Gothic Neo", "Pretendard", sans-serif; }
+  .scene { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; transition: opacity .45s ease, transform .45s ease; }
+  .hide { opacity: 0; transform: translateY(14px); pointer-events: none; }
+  h1 { font-size: 46px; letter-spacing: -1.2px; }
+  h1 b { color: #2563eb; }
+  .url { width: 760px; height: 72px; border-radius: 16px; background: #fff; border: 2px solid #d5d9e0; display: flex; align-items: center; gap: 14px; padding: 0 24px; font: 26px ui-monospace, Menlo, monospace; box-shadow: 0 8px 30px rgba(15,23,42,.08); }
+  .url .lock { color: #9aa1ab; font-size: 22px; }
+  .caret { display: inline-block; width: 2px; height: 30px; background: #2563eb; margin-left: 2px; vertical-align: middle; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .go { height: 56px; padding: 0 28px; border-radius: 99px; background: #2563eb; color: #fff; font-size: 22px; font-weight: 700; display: flex; align-items: center; transition: transform .2s; }
+  .go.press { transform: scale(.94); }
+  .skips { display: flex; flex-direction: column; gap: 18px; }
+  .skip { display: flex; align-items: center; gap: 16px; font-size: 30px; font-weight: 600; opacity: 0; transform: translateX(-12px); transition: all .4s ease; }
+  .skip.on { opacity: 1; transform: none; }
+  .skip s { color: #9aa1ab; font-weight: 400; text-decoration-thickness: 2px; }
+  .skip i { font-style: normal; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #16a34a; color: #fff; font-size: 22px; }
+  .row { display: flex; gap: 22px; align-items: flex-end; }
+  .post { width: 196px; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(15,23,42,.10); overflow: hidden; opacity: 0; transform: translateY(20px) scale(.96); transition: all .45s cubic-bezier(.2,.8,.2,1); }
+  .post.on { opacity: 1; transform: none; }
+  .post .head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 12px; color: #444; }
+  .post .head span { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg,#f59e0b,#ec4899); }
+  .post .media { width: 196px; height: 261px; background: #ddd; display: block; object-fit: cover; }
+  .post .tag { padding: 7px 10px; font-size: 12px; color: #666; }
+  .note { font-size: 22px; color: #555; }
+  .note b { color: #111; }
+</style></head><body>
+  <section class="scene" id="s1">
+    <h1><b>URL</b>만 넣으면</h1>
+    <div class="url"><span class="lock">🔒</span><span id="typed"></span><span class="caret"></span></div>
+    <div class="go" id="go">게시물 만들기</div>
+  </section>
+  <section class="scene hide" id="s2">
+    <div class="skips">
+      <div class="skip"><i>✓</i><span><s>페이지마다 동작 흐름 직접 캡처</s> → AI가 둘러보고 녹화</span></div>
+      <div class="skip"><i>✓</i><span><s>캡처 후 배경색·배치 다시 작업</s> → 인스타그램 3:4로 완성</span></div>
+    </div>
+  </section>
+  <section class="scene hide" id="s3">
+    <div class="row">${assets.map((a, i) => `<div class="post"><div class="head"><span></span>portfolio · ${String(i + 1).padStart(2, '0')}/${assets.length}</div>${
+      a.type === 'video' ? `<video class="media" src="${a.url}" muted loop playsinline preload="auto"></video>` : `<img class="media" src="${a.url}">`
+    }<div class="tag">${a.type === 'video' ? '▶ 영상 mp4' : '▣ 이미지 png'}</div></div>`).join('')}</div>
+    <p class="note"><b>바로 올릴 수 있는 파일 ${assets.length}개</b> · 1080×1440 · 영상 ${nVideo} · 이미지 ${assets.length - nVideo}</p>
+  </section>
+<script>
+  const url = ${JSON.stringify(conf.url.replace(/^https?:\/\//, ''))};
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  window.play = async () => {
+    await wait(500);
+    for (let i = 1; i <= url.length; i++) { typed.textContent = url.slice(0, i); await wait(45); }
+    await wait(500); go.classList.add('press'); await wait(220); go.classList.remove('press'); await wait(300);
+    s1.classList.add('hide'); s2.classList.remove('hide');
+    for (const el of document.querySelectorAll('.skip')) { await wait(450); el.classList.add('on'); }
+    await wait(2200);
+    s2.classList.add('hide'); s3.classList.remove('hide');
+    document.querySelectorAll('video').forEach((v) => { v.currentTime = 0; v.play(); });
+    for (const el of document.querySelectorAll('.post')) { await wait(160); el.classList.add('on'); }
+    await wait(5200);
+    window.done = true;
+  };
+</script></body></html>`;
+fs.writeFileSync(path.join(TMP, 'hero.html'), heroHtml);
+
+const heroRaw = await record({
+  baseUrl: pathToFileURL(TMP).href, outDir: TMP, outName: 'hero', viewport: { width: W, height: H }, scale: 1, jpegQuality: 92, crf: 18, cursor: false,
+  scenario: async ({ page, goto, startCapture, stopCapture }) => {
+    await goto('/hero.html');
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete) && [...document.querySelectorAll('video')].every((v) => v.readyState >= 2), null, { timeout: 15000 });
+    startCapture();
+    await page.evaluate(() => window.play());
+    await page.waitForFunction(() => window.done, null, { timeout: 30000 });
+    await stopCapture();
+  },
+});
+const hero = finish(heroRaw, 'hero', { width: 800, fps: 12 });
+log('hero', hero);
+
+// ---- 2. editor: 세부 수정 도구 ----
+const PORT = 4468;
 const runs = path.join(TMP, 'runs');
 fs.cpSync(src, path.join(runs, project), { recursive: true });
 const state = path.join(RUNS, rules.state_dir, 'state', `${project}.json`);
@@ -124,88 +132,47 @@ await new Promise((ok) => server.stdout.once('data', ok));
 
 const marks = {};
 let t0 = 0;
-const ui = await record({
-  baseUrl: `http://127.0.0.1:${PORT}`, outDir: TMP, outName: 'ui', viewport: { width: 1440, height: 900 }, scale: 1, jpegQuality: 90, crf: 18,
-  tapDefaults: { pre: 300, post: 500 },
+const editorRaw = await record({
+  baseUrl: `http://127.0.0.1:${PORT}`, outDir: TMP, outName: 'editor', viewport: { width: 1360, height: 820 }, scale: 1, jpegQuality: 90, crf: 18,
+  tapDefaults: { pre: 260, post: 450 },
+  setupContext: (context) => context.addInitScript(() => { try { localStorage.setItem('review.coach.v1', '1'); } catch { /* 안내 말풍선은 생략 */ } }),
   scenario: async ({ page: p, tap, dwell, goto, startCapture, stopCapture }) => {
     await goto('/');
     await p.waitForSelector('.thumb');
     await p.waitForFunction(() => [...document.querySelectorAll('#big video')].every((v) => v.readyState >= 2), null, { timeout: 15000 });
     startCapture();
     t0 = Date.now();
-    await dwell(2200);
-    await tap('text="알겠어요"');
-    await dwell(500);
+    await dwell(1000);
     await tap('.seg.chips >> text="1.5x"');
-    await dwell(1400);
-    // 타임라인 끝 지점을 왼쪽으로 끈다
+    await dwell(900);
+    // 타임라인 끝 지점을 끈다
     const r = await p.locator('.tl .range').boundingBox();
     const [x, y] = [r.x + r.width - 2, r.y + r.height / 2];
     await p.evaluate(([cx, cy]) => window.__moveCursor?.(cx, cy), [x, y]);
-    await p.mouse.move(x, y); await dwell(450);
+    await p.mouse.move(x, y); await dwell(400);
     await p.evaluate(() => window.__pressCursor?.());
     await p.mouse.down();
-    for (let i = 1; i <= 20; i++) { const nx = x - i * 6; await p.mouse.move(nx, y); await p.evaluate(([cx, cy]) => window.__moveCursor?.(cx, cy), [nx, y]); await dwell(30); }
+    for (let i = 1; i <= 16; i++) { const nx = x - i * 6; await p.mouse.move(nx, y); await p.evaluate(([cx, cy]) => window.__moveCursor?.(cx, cy), [nx, y]); await dwell(28); }
     await p.mouse.up();
-    await dwell(1200);
+    await dwell(800);
     await tap('#panelTabs >> text="전체 스타일"');
-    await dwell(600);
     const hex = p.locator('input[aria-label="배경색 HEX 값"]');
     await tap(hex, { blur: false });
     await hex.selectText();
-    await hex.pressSequentially('#1F1D29', { delay: 70 });
+    await hex.pressSequentially('#FDE68A', { delay: 60 });
     await hex.press('Enter');
-    await dwell(1500);
-    await tap('.thumb >> nth=1');
     await dwell(1300);
     await tap('#build', { post: 200 });
-    marks.exportStart = (Date.now() - t0) / 1000;
+    marks.a = (Date.now() - t0) / 1000;
     await p.waitForFunction(() => !document.querySelector('#build').dataset.busy, null, { timeout: 300000 });
-    marks.exportEnd = (Date.now() - t0) / 1000;
-    await dwell(2600);
-    await tap('#panelTabs >> text="자동 검사"');
-    await dwell(2600);
+    marks.b = (Date.now() - t0) / 1000;
+    await dwell(2200);
     await stopCapture();
   },
 });
 server.kill();
-log('편집 화면', probe(ui).duration, '초, 내보내기', marks);
-
-// ---- 3. 이어 붙이기 ----
-const seg = (name, args) => { const f = path.join(TMP, `seg-${name}.mp4`); ff('ffmpeg', ['-v', 'error', '-y', ...args, '-r', String(FPS), '-c:v', 'libx264', '-crf', '20', '-pix_fmt', 'yuv420p', '-an', f]); return f; };
-const fit = `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=0x141517,setsar=1`;
-const still = (name, sec) => seg(name, ['-loop', '1', '-t', String(sec), '-i', cards[name], '-vf', `${fit},format=yuv420p`]);
-
-// 내보내기를 기다리는 구간은 잘라 낸다 (앞뒤 조금만 남긴다)
-const cutA = marks.exportStart + 1.2, cutB = Math.max(cutA, marks.exportEnd - 0.4);
-const uiSeg = seg('ui', ['-i', ui, '-vf', `select='not(between(t,${cutA},${cutB}))',setpts=N/FRAME_RATE/TB,${fit}`]);
-
-// 결과: 내보낸 영상을 나란히 (같은 영상은 한 번만)
-const vids = [];
-const seen = new Set();
-for (const f of fs.readdirSync(exportsDir).filter((x) => x.endsWith('.mp4')).sort()) {
-  const key = fs.statSync(path.join(exportsDir, f)).size;
-  if (!seen.has(key)) { seen.add(key); vids.push(path.join(exportsDir, f)); }
-}
-const show = vids.slice(0, 4);
-const tw = 240, th = 320, gap = 24, top = 210;
-const left = Math.round((W - (show.length * tw + (show.length - 1) * gap)) / 2);
-const inputs = show.flatMap((f) => ['-stream_loop', '-1', '-t', '7', '-i', f]);
-const graph = [`[0:v]${fit}[b0]`, ...show.map((_, i) => `[${i + 1}:v]scale=${tw}:${th}:flags=lanczos[v${i}]`),
-  ...show.map((_, i) => `[b${i}][v${i}]overlay=${left + i * (tw + gap)}:${top}:shortest=0[b${i + 1}]`)].join(';');
-const resultSeg = seg('result', ['-loop', '1', '-t', '7', '-i', cards.result, ...inputs, '-filter_complex', `${graph};[b${show.length}]format=yuv420p[o]`, '-map', '[o]', '-t', '7']);
-
-const parts = [still('intro', 3.5), still('step1', 4.5), still('step2', 4.5), still('step3', 4.5), still('step4', 3), uiSeg, resultSeg, still('outro', 3.5)];
-const list = path.join(TMP, 'list.txt');
-fs.writeFileSync(list, parts.map((f) => `file '${f}'`).join('\n'));
-const mp4 = path.join(OUT, 'demo.mp4');
-ff('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c:v', 'libx264', '-crf', '22', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', mp4]);
-
-// README용 GIF: 작게, 초당 8프레임
-const gif = path.join(OUT, 'demo.gif');
-const pal = path.join(TMP, 'pal.png');
-ff('ffmpeg', ['-v', 'error', '-y', '-i', mp4, '-vf', 'fps=8,scale=960:-1:flags=lanczos,palettegen=max_colors=128:stats_mode=diff', pal]);
-ff('ffmpeg', ['-v', 'error', '-y', '-i', mp4, '-i', pal, '-lavfi', 'fps=8,scale=960:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', gif]);
+const editor = finish(editorRaw, 'editor', { cut: [marks.a + 0.8, Math.max(marks.a + 0.8, marks.b - 0.3)], width: 900, fps: 10 });
+log('editor', editor);
 
 fs.rmSync(TMP, { recursive: true, force: true });
-console.log(JSON.stringify({ mp4, mp4_seconds: probe(mp4).duration, mp4_mb: +(fs.statSync(mp4).size / 1e6).toFixed(1), gif, gif_mb: +(fs.statSync(gif).size / 1e6).toFixed(1) }, null, 2));
+console.log(JSON.stringify({ hero, editor }, null, 2));
