@@ -1,0 +1,15 @@
+node_modules/
+.DS_Store
+# 실행 결과·상태는 프로젝트마다 이 컴퓨터에만 둔다 (클라이언트 작업물이 섞인다)
+runs/
+projects.yaml
+.claude/settings.local.json
+.env*
+*.log
+# 영상·이미지는 올리지 않는다 (계획·편집값·판정 기록 md·json·mjs만 남긴다)
+runs/*/raw/*.mp4
+runs/*/raw/*.png
+runs/*/raw/.*-raw/
+runs/*/export/*.mp4
+runs/*/export/*.png
+runs/*/export/.cache/

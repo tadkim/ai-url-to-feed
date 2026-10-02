@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run status *)",
+      "Bash(node scripts/run.mjs status *)",
+      "Bash(node scripts/run.mjs begin *)",
+      "Bash(node scripts/run.mjs end *)",
+      "Bash(node scripts/run.mjs usage *)",
+      "Bash(node scripts/judge.mjs *)",
+      "Bash(node scripts/explore.mjs *)",
+      "Bash(node scripts/try.mjs *)",
+      "Bash(node scripts/record.mjs *)",
+      "Bash(node scripts/export.mjs *)"
+    ]
+  }
+}

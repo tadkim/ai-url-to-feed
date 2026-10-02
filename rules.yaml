@@ -1,0 +1,132 @@
+# 판정 수치 SSOT. 숫자는 이 파일에만 둔다.
+# 결정 기록: prd.md 11장
+
+# 프로젝트 목록(실행 단위)은 projects.yaml에 둔다 — 이 컴퓨터에만 있고 git에 올리지 않는다. 형식은 projects.example.yaml
+
+inputs:                   # 시작 전에 있어야 하는 파일. 없으면 status가 STOP
+  - prd.md
+  - story-service.md
+  - story-work.md
+
+tools:                    # 없으면 status가 STOP, npm test가 FAIL
+  node_min: 22.2.0        # zlib.crc32 (export.mjs의 PNG)
+  commands: [ffmpeg, ffprobe]
+  packages: [walkthrough-recorder, playwright, yaml]   # npm install로 설치되고 실제로 불러올 수 있어야 한다 (file: 링크가 끊겨도 install은 성공한다)
+
+# 출력 위치: runs/<project>/
+phases:
+  P1: plan/plan.json                  # planner. 시나리오는 같은 폴더의 *.scenario.mjs
+  P3: edit/edits.json                 # editor가 처음 쓰고, 사람이 검토용 HTML에서 고친다
+
+derived:                  # 스크립트만 쓰는 파일
+  raw: raw/manifest.json              # record.mjs — 녹화 결과
+  export: export/manifest.json        # export.mjs — 내보낸 에셋
+  checks: gate/checks.json            # judge.mjs P1~P3
+  p4: gate/p4-gate.json               # judge.mjs P4
+  approval_plan: gate/approval-plan.json     # run.mjs approve plan
+  approval_final: gate/approval-final.json   # run.mjs approve final
+
+agents:                   # writes: runs/<project>/ 기준. "/"로 끝나면 폴더, 아니면 파일 1개
+  planner: { phases: [P1], writes: [plan/] }
+  editor:  { phases: [P3], writes: [edit/edits.json] }
+state_dir: .harness       # runs/.harness/ — 실행 상태·로그. git에 올리지 않는다
+
+record:
+  viewport: { width: 360, height: 640 }
+  scale: 3                            # 1080x1920. 바꾸지 않는다 (축소로만 맞춰야 화질이 남는다)
+  fps: 30
+  jpeg_quality: 88
+  crf: 20
+  locale: ko-KR                       # 헤드리스 기본값(영어)이면 영문으로 나오는 사이트가 있다
+  max_raw_seconds: 120                # 녹화본 1개의 최대 길이
+  sheet_every_seconds: 1              # 컨택트 시트 간격 (2초면 짧은 녹화의 끝 상태가 빠졌다 — 2026-10-01)
+  sheet_max_tiles: 32                 # 넘으면 간격을 늘린다
+  scene_threshold: 0.25               # 장면 전환 검출 (ffmpeg scene)
+  matrix: bt601                       # 녹화본의 YUV 행렬. 엔진이 JPEG 프레임을 태그 없이 인코딩한다
+
+assets:
+  count: [5, 10]                      # 별도 요청이 없을 때. 인스타그램 한 게시물 최대 10
+  canvas: { width: 1080, height: 1440 }   # 3:4
+  types: [video, image]
+  # scale: 녹화본(1080x1920) 대비 축소 배율. slots: 화면 왼쪽 위 좌표 [x, y]
+  layouts:
+    single: { types: [video, image], scale: 0.6, slots: [[216, 144]] }                        # 648x1152, 좌우 216 / 상하 144
+    double: { types: [image],        scale: 0.4, slots: [[84, 336], [564, 336]] }             # 432x768, 좌우 84 / 사이 48 / 상하 336
+    triple: { types: [image],        scale: 0.3, slots: [[30, 432], [378, 432], [726, 432]] } # 324x576, 좌우 30 / 사이 24 / 상하 432 (제안)
+
+style:                    # edits.json style의 기본값과 허용 범위
+  default: { bg: "#B987FF", border: "#444444", bw: 2, radius: 0 }
+  bw: [0, 8]
+  radius: [0, 80]
+
+edit:
+  speed: [0.5, 3]                     # 재생 속도 범위
+  min_seconds: 1                      # 영상 에셋의 최소 길이 (내보낸 뒤)
+
+export:
+  image: { format: png }
+  video: { codec: h264, pix_fmt: yuv420p, color: bt709, fps: 30, crf: 18, max_seconds: 20 }
+  # color: 색 태그(color_space·primaries·transfer). 태그가 없으면 브라우저·인스타그램이 bt709로 읽어 배경이 이미지와 달라진다
+
+gate:
+  same_color_delta_e: 3               # 배경색이 "같다"로 보는 최대 차이 (CIE76)
+  blank_share: 0.985                  # 화면 영역의 이 비율 이상이 한 가지 색이면 빈 화면으로 본다
+  loop_psnr_min: 40                   # 루프 이음매 (구간 시작 프레임과 끝 프레임) 최소 PSNR dB
+  loop_tolerance_seconds: 0.04        # 루프 구간 길이와 주기 최소공배수의 허용 차이 (1프레임 남짓)
+
+retry:
+  p4_fail_to_p3: 2                    # 같은 편집값으로 다시 판정하면 세지 않는다
+  plan_reject: 5                      # 사람 피드백도 거절로 기록한다. 피드백 2번에 한도가 찼던 것을 늘렸다 (2026-10-01)
+  final_reject: 5
+
+review: { port: 4455 }    # 검토용 HTML 서버 (127.0.0.1)
+
+gates:
+  # --- P1 (촬영 계획) ---
+  plan_valid:
+    phase: P1
+    check: "plan.json 형식. 에셋 번호가 01부터 연속이고 수가 count 안. 유형·배치가 목록 안이고 배치가 그 유형을 허용한다. 에셋의 source가 recordings에 있고 시나리오 파일이 있다"
+    on_fail: P1
+  scenario_rules:
+    phase: P1
+    check: "시나리오마다 export default와 startCapture()가 있다. setTimeout·waitForTimeout·record() 직접 호출·viewport/scale 지정이 없다. 쓰기 허용 프로젝트는 맨 위 주석에 '쓰기' 경고가 있다"
+    on_fail: P1
+  approval_plan:
+    phase: P1
+    check: "approval-plan.json의 해시가 현재 plan.json + 시나리오 파일과 같다"
+    human_approval: true
+  # --- P2 (녹화) ---
+  raw_files:
+    phase: P2
+    check: "manifest가 현재 계획으로 만들어졌고 오류가 없다. 녹화본이 viewport x scale 크기이고 길이 <= max_raw_seconds"
+    on_fail: P1
+  # --- P3 (편집값) ---
+  edits_valid:
+    phase: P3
+    check: "edits.json 형식. 에셋 번호 연속·수가 count 안. 구간이 녹화본 길이 안이고 in < out. 속도가 범위 안. 영상은 single만. 이미지의 shots 수 = 배치의 화면 수. style 값이 범위 안"
+    on_fail: P3
+  # --- P4 (export/) ---
+  export_files:
+    phase: P4
+    check: "manifest가 현재 edits.json·녹화본으로 만들어졌다. 영상은 export.video 규격(코덱, 크기, fps, 픽셀 형식, 색 태그, 소리 없음), 이미지는 canvas 크기 PNG"
+    on_fail: P3
+  video_length:
+    phase: P4
+    check: "영상 길이가 edit.min_seconds 이상, max_seconds 이하"
+    on_fail: P3
+  clip_edges:
+    phase: P4
+    check: "영상의 첫 프레임과 마지막 프레임, 이미지의 각 화면이 빈 화면(gate.blank_share)이 아니다"
+    on_fail: P3
+  canvas_bg:
+    phase: P4
+    check: "모든 에셋에서 화면 밖 영역의 색이 style.bg와 same_color_delta_e 안에서 같다"
+    on_fail: P3
+  loop_seam:
+    phase: P4
+    check: "루프 에셋의 구간 길이가 주기의 최소공배수이고, 구간 시작·끝 프레임의 PSNR >= loop_psnr_min"
+    on_fail: P3
+  approval_final:
+    phase: P4
+    check: "approval-final.json의 해시가 현재 export/ 파일 + edits.json과 같다"
+    human_approval: true
