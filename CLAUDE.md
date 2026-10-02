@@ -20,7 +20,10 @@
 승인·거절·unblock·accept는 사람이 그 말을 했을 때만 실행한다. 오케스트레이터가 스스로 하지 않는다.
 - 승인 대기(APPROVAL_PLAN, APPROVAL_FINAL) 중에 사람이 "거절"이라는 말 없이 바꿔 달라는 피드백을 주면 거절로 기록한다 (`reject ... --note "<피드백 원문>"`). 피드백이 두 가지로 읽히면 어느 쪽으로 넘겼는지 사람에게 알린다.
 - 승인은 넓게 읽지 않는다. 볼 것(녹화본·완성본)이 아직 없을 때 들은 승인은 기록하지 않고, 준비된 뒤 다시 받는다.
-`<project>`는 projects.yaml에 있어야 한다 (없으면 projects.example.yaml을 복사해 만든다). 새 프로젝트면 주소, `<title>`, 대상 종류(deployed / local), 쓰기 허용 여부를 물어 projects.yaml에 추가한 뒤 시작한다. 쓰기 허용은 사람이 정한 값만 적는다.
+`<project>`는 projects.yaml에 있어야 한다.
+- **이미 적혀 있으면 묻지 않고 바로 시작한다.** `url` 한 줄이면 충분하다. 빠진 항목은 기본값으로 둔다: `target` = 배포된 사이트, `allow_writes` = false(저장 요청을 막음, 안전한 쪽), `title` = 검사하지 않음. 사람에게 다시 확인받지 않는다.
+- `target: local`인데 `title`이 없으면 그때만 멈추고 페이지 제목을 묻는다 (record·explore가 지금 제목을 알려 준다).
+- projects.yaml에 없으면 주소만 물어 추가한다 (파일이 없으면 projects.example.yaml을 복사해 만든다). `allow_writes`는 사람이 직접 true라고 말했을 때만 적는다.
 
 ## 루프
 
