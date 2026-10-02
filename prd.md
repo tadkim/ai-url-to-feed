@@ -250,12 +250,12 @@ runs/.harness/ 실행 상태, 로그 (git에 올리지 않는다)
 
 | 층 | 위치 | 프로젝트마다 바뀌나 |
 |---|---|---|
-| 녹화 엔진 | `walkthrough-recorder` (별도 레포, 파일 경로로 링크. `playwright`는 peer dependency) | 아니오 |
+| 녹화 엔진 | `walkthrough-recorder` (별도 공개 레포 github.com/tadkim/walkthrough-recorder, npm으로 설치. `playwright`는 peer dependency) | 아니오 |
 | 시나리오 | `runs/<project>/plan/*.scenario.mjs` | **예** |
 | 후처리 | `scripts/export.mjs` (이전 프로젝트 `instagram-frame.sh`·`round-corners.sh`의 좌표와 방법을 옮겼다. sh 파일은 복사하지 않는다) | 아니오 |
 | 하네스 | `rules.yaml`, `scripts/run.mjs`·`judge.mjs`·`explore.mjs`·`record.mjs`·`export.mjs`·`review.mjs`, `.claude/agents/` | 아니오 |
 
-확인한 환경 (2026-10-01): macOS, node v22.23.1, ffmpeg 9.0.1. 녹화 엔진은 아직 GitHub에 올라가 있지 않아 `package.json`에서 로컬 경로로 링크한다 (README "처음 준비하기").
+확인한 환경 (2026-10-01): macOS, node v22.23.1, ffmpeg 9.0.1. 녹화 엔진은 GitHub 공개 저장소에서 `npm install`로 설치한다 (2026-10-02 공개, MIT).
 
 ---
 

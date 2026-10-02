@@ -2,6 +2,7 @@
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 // 시작 전 검사: 주소가 응답하고 <title>이 등록한 값과 같은가 (다른 프로젝트 서버가 같은 포트에 떠 있으면 엉뚱한 앱이 녹화된다)
+// title을 적지 않았으면 배포 사이트는 검사하지 않고 넘어간다. 로컬 개발 서버(target: local)는 포트를 헷갈리기 쉬워 title이 꼭 있어야 한다
 export async function assertTarget(conf) {
   let html;
   try {
@@ -13,7 +14,11 @@ export async function assertTarget(conf) {
     throw new Error(`대상이 응답하지 않는다: ${conf.url} (${e.message})${hint}`);
   }
   const title = (/<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? '').trim();
-  if (title !== conf.title) throw new Error(`대상 앱이 다르다: <title>이 "${title}" — rules.yaml에는 "${conf.title}"`);
+  if (conf.title == null) {
+    if (conf.target === 'local') throw new Error(`로컬 개발 서버는 projects.yaml에 title을 적어야 한다 — 지금 페이지의 <title>은 "${title}"`);
+    return title;
+  }
+  if (title !== String(conf.title)) throw new Error(`대상 앱이 다르다: <title>이 "${title}" — projects.yaml에는 "${conf.title}"`);
   return title;
 }
 

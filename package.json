@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "playwright": "^1.55.0",
-    "walkthrough-recorder": "file:../../../../../Works/walkthrough-recorder",
+    "walkthrough-recorder": "github:tadkim/walkthrough-recorder",
     "yaml": "^2.5.0"
-  }
+  },
+  "license": "MIT"
 }

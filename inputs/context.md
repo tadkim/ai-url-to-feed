@@ -19,7 +19,7 @@
 |---|---|
 | node (rules.yaml `tools.node_min` 이상) | 스크립트 실행 |
 | ffmpeg, ffprobe | 컨택트 시트, 내보내기, 측정 |
-| walkthrough-recorder (별도 레포, package.json에서 파일 경로로 링크. README "처음 준비하기" 2번) | 녹화 엔진: 가짜 커서, 배율 반영 캡처, 실타이밍 인코딩 |
+| walkthrough-recorder (별도 공개 레포 tadkim/walkthrough-recorder, `npm install`로 설치) | 녹화 엔진: 가짜 커서, 배율 반영 캡처, 실타이밍 인코딩 |
 | playwright + chromium | 사이트 둘러보기(explore.mjs). 녹화 엔진은 자기 폴더의 playwright를 쓴다 |
 
 ## 외부 소스

@@ -48,7 +48,7 @@ export function toolProblems(rules) {
     if (r.error || r.status !== 0) out.push(`${c}를 실행할 수 없다 — ffmpeg를 설치한다 (macOS: brew install ffmpeg)`);
   }
   for (const p of rules.tools.packages) {
-    try { import.meta.resolve(p); } catch { out.push(`npm 패키지 ${p}를 불러올 수 없다 — npm install (walkthrough-recorder는 README "처음 준비하기" 2번)`); }
+    try { import.meta.resolve(p); } catch { out.push(`npm 패키지 ${p}를 불러올 수 없다 — npm install을 실행한다`); }
   }
   return out;
 }

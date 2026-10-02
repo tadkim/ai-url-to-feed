@@ -118,7 +118,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { lcm: len, tries, best: tries.reduce((b, x) => (x.psnr > (b?.psnr ?? -1) ? x : b), null) });
     }
     if (req.method === 'GET' && p.startsWith('/files/')) {
-      const rel = path.normalize(p.slice('/files/'.length));
+      const rel = path.posix.normalize(p.slice('/files/'.length));   // Windows에서도 / 구분자로 검사한다
       if (!/^(raw|export)\/[^/]+\.(mp4|png)$/.test(rel)) return send(res, 403, { error: '열 수 없는 경로' });
       const file = runPath(project, rel);
       if (!exists(file)) return send(res, 404, { error: '파일 없음' });

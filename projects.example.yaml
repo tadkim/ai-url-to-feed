@@ -4,7 +4,7 @@
 projects:                 # 실행 단위. 여기 없는 project는 실행하지 않는다
   my-project:             # 영문 소문자·숫자·- 로. Claude Code에 "my-project 하네스 시작해줘"처럼 부른다
     url: https://example.com          # 끝에 "/"를 붙이지 않는다. 시나리오의 goto('/')가 뒤에 붙는다
-    title: 예시 사이트                 # 그 페이지의 <title>. 시작 전에 같은지 본다 (엉뚱한 앱 녹화 방지)
+    title: 예시 사이트                 # 그 페이지의 <title>. 시작 전에 같은지 본다 (엉뚱한 앱 녹화 방지). 배포 사이트는 생략 가능, local은 필수
     target: deployed                  # deployed | local (local이면 dev 서버를 사람이 먼저 띄운다)
     allow_writes: false               # false면 POST·PUT·PATCH·DELETE 요청을 막는다. true면 막지 않고 개수만 센다
     # allow_post: ["firestore\\.googleapis\\.com"]   # allow_writes가 false여도 통과시킬 주소 (읽기가 POST인 백엔드)
