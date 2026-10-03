@@ -72,3 +72,4 @@ runs/<p>/edit/edits.json은 editor와 사람(편집 화면)이 함께 쓴다.
 - 게이트를 추가하면 rules.yaml `gates` + scripts/lib.mjs `CHECKERS` + scripts/test.mjs 케이스를 함께 추가한다.
 - 녹화 대상 레포의 소스는 고치지 않는다.
 - 이 프로젝트에서 만드는 HTML 화면(scripts/ui/*.html, scripts/review.html)의 아이콘은 **Lucide**만 쓴다. 페이지에서 `/ui/lucide.js`(node_modules/lucide)를 불러오고 `icon('이름')` 도우미로 넣는다 (이름은 lucide.dev의 kebab-case). 이모지나 ↑ ✓ ▶ 같은 글자 기호를 아이콘 대신 쓰지 않는다.
+- 화면 색은 밝은 테마(연회색 바탕, 흰 카드, 검정 글자, 라임 버튼)다. 색은 scripts/ui/base.css와 scripts/review.html `:root`의 토큰만 쓴다. 라임(`--accent`)은 채우기에만, 글자·테두리 강조는 `--accent-strong`. 화면을 바꾸면 `node scripts/make-demo.mjs <완성한 프로젝트>`로 README 미리보기를 다시 만든다.
