@@ -2,7 +2,7 @@
 // Phase별 게이트 판정. 통과·실패는 이 스크립트만 정한다 (에이전트 보고를 PASS/FAIL로 읽지 않는다).
 // 사용: node scripts/judge.mjs <project> --phase P1|P2|P3|P4 [--no-count]
 //   P1~P3 → gate/checks.json, P4 → gate/p4-gate.json (시도 횟수 포함)
-//   --no-count: 검토용 서버가 쓴다. 사람이 고치는 중의 FAIL은 시도 횟수에 넣지 않는다
+//   --no-count: 편집 화면 서버가 쓴다. 사람이 고치는 중의 FAIL은 시도 횟수에 넣지 않는다
 // 종료 코드: 0 PASS(사람 승인 게이트는 빼고), 1 FAIL, 2 실행 오류
 import {
   loadRules, assertProject, loadContext, gatesFor, runGates, isHuman, derivedPath, readIf, writeJson, now, sha,

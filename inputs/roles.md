@@ -21,15 +21,17 @@
 | record.mjs | plan/의 시나리오를 walkthrough-recorder로 녹화 (viewport x scale). 녹화본마다 컨택트 시트와 장면 전환 시점을 만든다 |
 | export.mjs | edits.json대로 구간 → 속도 → 배치 → 테두리·모서리를 합성해 export/에 영상·이미지를 만든다 |
 | judge.mjs | Phase별 게이트 판정. gate/checks.json, gate/p4-gate.json을 쓴다 |
-| review.mjs | 검토용 HTML 서버 (127.0.0.1). 사람이 고친 값을 edits.json에 저장하고, "내보내기"로 export.mjs → judge.mjs를 실행한다 |
+| app.mjs (`npm start`) | 시작 화면 서버 (127.0.0.1). URL로 projects.yaml에 등록, 7단계 진행 표시(lib.mjs `progress`), 녹화 확인·완성본 확인 화면(이전 결과와 비교), 편집 화면(`/p/<p>/edit/`). 승인·거절 버튼은 사람이 누를 때만 run.mjs approve·reject를 실행한다 |
+| review.mjs | 편집 화면만 여는 서버. 사람이 고친 값을 edits.json에 저장하고, "내보내기"로 export.mjs → judge.mjs를 실행한다 (app.mjs와 server.mjs를 같이 쓴다) |
 
 ## 사람
 
-- 승인은 사람만 한다. "<project> 촬영 계획 승인" → `run.mjs approve <project> plan`, "<project> 완성본 승인" → `run.mjs approve <project> final`.
+- 승인은 사람만 한다. "<project> 촬영 계획 승인" → `run.mjs approve <project> plan`, "<project> 완성본 승인" → `run.mjs approve <project> final`. 시작 화면의 승인·거절 버튼도 같은 명령을 실행한다 (화면을 연 뒤 내용이 바뀌었으면 승인하지 않는다).
+- 거절하면 run.mjs가 직전 결과를 `runs/<p>/history/<plan|final>/`에 남긴다 (최근 3개). 승인 화면이 이전과 지금을 나란히 보여 준다.
 - 승인 1은 plan.json + 시나리오 + 녹화본 해시, 승인 2는 export/ 파일 + edits.json 해시를 남긴다. 이후 내용이 바뀌면 예전 승인은 무효다.
-- 사람은 검토용 HTML에서 edits.json을 직접 고칠 수 있다 (구간, 속도, 추출 시점, 배경색·테두리·모서리, 순서, 빼기·더하기). 거절하고 editor에게 맡길 수도 있다.
+- 사람은 편집 화면에서 edits.json을 직접 고칠 수 있다 (구간, 속도, 추출 시점, 배경색·테두리·모서리, 순서, 빼기·더하기). 거절하고 editor에게 맡길 수도 있다.
 - STOP은 사람이 "<project> 계속 진행해"라고 해야 풀린다.
-- 쓰기 허용(`allow_writes`)은 사람이 rules.yaml에 직접 적는다. 에이전트가 바꾸지 못한다.
+- 쓰기 허용(`allow_writes`, `allow_post`)은 사람이 projects.yaml에 직접 적는다. 에이전트가 바꾸지 못한다. 읽기 전용 POST의 기본 통과 목록은 rules.yaml `record.read_post`.
 
 ## 편집 범위 확인
 

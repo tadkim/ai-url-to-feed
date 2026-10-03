@@ -56,7 +56,7 @@ export function toolProblems(rules) {
 export function assertProject(rules, project) {
   if (!rules.projects[project]) {
     const known = Object.keys(rules.projects);
-    if (!known.length) throw new Error(`등록된 프로젝트가 없다 — cp projects.example.yaml projects.yaml 후 프로젝트를 적는다 (${path.relative(ROOT, PROJECTS_FILE) || PROJECTS_FILE})`);
+    if (!known.length) throw new Error(`등록된 프로젝트가 없다 — npm start로 시작 화면을 열어 주소를 넣는다 (또는 cp projects.example.yaml projects.yaml 후 직접 적는다) (${path.relative(ROOT, PROJECTS_FILE) || PROJECTS_FILE})`);
     throw new Error(`project는 ${known.join(' | ')} 중 하나여야 한다 (projects.yaml): ${project}`);
   }
 }
@@ -541,3 +541,117 @@ export function runGates(ctx, gates) {
 
 // ---- 에이전트 편집 범위 기록 (겹쳐 도는 다른 project의 쓰기를 구분한다) ----
 export const scopeDir = () => { const d = path.join(RUNS, '.harness', 'scope'); fs.mkdirSync(d, { recursive: true }); return d; };
+
+// ---- 승인 비교용 이전 버전 보관: 거절할 때 그 시점의 결과를 runs/<p>/history/<plan|final>/<시각>/에 남긴다 ----
+export const HISTORY_KEEP = 3;
+export function snapshotHistory(rules, project, kind) {
+  const stamp = now().replace(/[:.]/g, '-');
+  const dir = runPath(project, `history/${kind}/${stamp}`);
+  const copy = (rel) => { const s = runPath(project, rel); if (exists(s)) { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.copyFileSync(s, path.join(dir, rel)); } };
+  if (kind === 'plan') {
+    copy('plan/plan.json'); copy('raw/manifest.json');
+    const raw = readIf(derivedPath(rules, project, 'raw'), true);
+    for (const r of raw?.recordings ?? []) if (!r.error) { copy(`raw/${r.file}`); copy(`raw/${r.sheet}`); }
+  } else {
+    copy('edit/edits.json'); copy('export/manifest.json');
+    const exp = readIf(derivedPath(rules, project, 'export'), true);
+    for (const a of exp?.assets ?? []) copy(`export/${a.file}`);
+  }
+  const base = runPath(project, `history/${kind}`);
+  const all = fs.readdirSync(base).sort();
+  for (const old of all.slice(0, Math.max(0, all.length - HISTORY_KEEP))) fs.rmSync(path.join(base, old), { recursive: true, force: true });
+  return dir;
+}
+export function latestHistory(project, kind) {
+  const base = runPath(project, `history/${kind}`);
+  if (!exists(base)) return null;
+  const last = fs.readdirSync(base).sort().at(-1);
+  return last ? { dir: path.join(base, last), rel: `history/${kind}/${last}`, at: last } : null;
+}
+
+// ---- 사용자 기준 7단계 진행 상황 ----
+export const STAGES = [
+  { id: 1, title: '준비', who: 'computer' },
+  { id: 2, title: '사이트 등록', who: 'me' },
+  { id: 3, title: '녹화', who: 'ai' },
+  { id: 4, title: '녹화 확인', who: 'me' },
+  { id: 5, title: '게시물 만들기', who: 'ai' },
+  { id: 6, title: '다듬기', who: 'me', optional: true },
+  { id: 7, title: '완성', who: 'me' },
+];
+
+// 지금 돌고 있는 에이전트 (begin 뒤 end 전)
+export function runningAgent(project) {
+  const dir = path.join(RUNS, '.harness', 'scope');
+  if (!exists(dir)) return null;
+  const f = fs.readdirSync(dir).find((x) => x.startsWith(`${project}-`) && x.endsWith('.json'));
+  if (!f) return null;
+  const s = readIf(path.join(dir, f), true);
+  return s ? { agent: s.agent, phase: s.phase, started_at: s.started_at } : null;
+}
+
+// status(run.mjs)의 결과와 파일 상태로 단계·체크 항목·지금 할 일을 만든다
+export function progress(rules, project, st, next, env = {}) {
+  const ctx = loadContext(rules, project);
+  const ok = (id) => { try { return CHECKERS[id](ctx).length === 0; } catch { return false; } };
+  const p4 = readIf(derivedPath(rules, project, 'p4'), true);
+  const eh = editsHash(rules, project);
+  const p4Current = !!p4 && p4.edits_hash === eh && p4.export_hash === exportHash(rules, project);
+  const exported = !!(ctx.exp && ctx.edits && ctx.edits.assets.every((a) => ctx.exp.assets.find((x) => x.n === a.n)?.hash === assetHash(rules, ctx.edits, a, ctx.raw)));
+  const recs = (ctx.raw?.recordings ?? []).filter((r) => !r.error);
+  const conf = ctx.conf;
+  const c = (label, done, detail) => ({ label, done: !!done, detail: detail ?? null });
+  const stages = STAGES.map((s) => ({ ...s, checks: [] }));
+  const tools = env.tools ?? [];
+  stages[0].checks = [
+    c('Node.js · ffmpeg', !tools.some((t) => /node|ffmpeg|ffprobe/.test(t))),
+    c('녹화 엔진 · 패키지', !tools.some((t) => /npm 패키지/.test(t))),
+    c('녹화용 브라우저', env.chromium !== false, env.chromium === false ? 'npx playwright install chromium' : null),
+  ];
+  stages[1].checks = [
+    c('주소 등록', true, conf.url),
+    c('사이트 응답', env.site?.ok, env.site ? (env.site.ok ? env.site.title || '응답 확인' : env.site.error) : '확인 전'),
+    c(conf.allow_writes ? '저장 요청 허용 (직접 설정)' : '저장 요청 차단', true),
+  ];
+  stages[2].checks = [
+    c('장면 계획', ctx.plan && st.done.P1, ctx.plan ? `에셋 ${ctx.plan.assets?.length ?? 0}개 · 녹화 ${ctx.plan.recordings?.length ?? 0}개` : null),
+    c('시나리오 검사', ctx.plan && ok('plan_valid') && ok('scenario_rules')),
+    c('녹화', recs.length && ctx.raw?.record_hash === recordHash(rules, project), recs.length ? recs.map((r) => `${r.name} ${Math.round(r.duration * 10) / 10}초`).join(' · ') : null),
+    c('녹화 검사', recs.length && ok('raw_files')),
+  ];
+  stages[3].checks = [
+    c('녹화본 보기', recs.length > 0),
+    c('촬영 계획 승인', ok('approval_plan')),
+  ];
+  stages[4].checks = [
+    c('구간·속도 제안', ctx.edits && st.done.P3),
+    c('파일 만들기', exported, exported ? `${ctx.exp.assets.length}개` : null),
+    c('자동 검사', p4Current && p4.pass, p4Current ? (p4.pass ? '모두 통과' : `${p4.results.filter((r) => !r.pass && r.gate !== 'approval_final').length}개 실패`) : null),
+  ];
+  stages[5].checks = [
+    c('편집 화면에서 확인 (선택)', exported && p4Current),
+  ];
+  stages[6].checks = [
+    c('완성본 승인', ok('approval_final')),
+  ];
+  for (const s of stages) s.done = s.checks.every((x) => x.done);
+  // 지금 단계: status의 next로 정한다
+  const at = { P1: 3, P2: 3, APPROVAL_PLAN: 4, P3: 5, P4: 5, APPROVAL_FINAL: 7, DONE: 7 }[next.next];
+  let current = next.next === 'STOP' ? (stages.find((s) => !s.done && !s.optional)?.id ?? 7) : at ?? 3;
+  if (tools.length || env.chromium === false) current = 1;
+  for (const s of stages) s.state = next.next === 'DONE' || s.id < current || (s.optional && current === 7 && s.done) ? 'done' : s.id === current ? (next.next === 'STOP' ? 'stopped' : 'now') : 'todo';
+  if (current === 7 && next.next === 'APPROVAL_FINAL') stages[5].state = stages[5].done ? 'done' : 'optional';
+  const agent = runningAgent(project);
+  const started = !!(ctx.plan || st.done.P1 || agent);
+  let todo;
+  if (current === 1) todo = { who: 'me', text: '실행 환경을 준비해요', detail: tools.join(' / ') || 'npx playwright install chromium', link: 'docs/troubleshooting.md' };
+  else if (next.next === 'STOP') todo = { who: 'me', text: '멈췄어요 — 이유를 확인하고 고친 뒤 이어서 진행해요', detail: next.reason, say: `${project} 계속 진행해`, link: 'docs/troubleshooting.md' };
+  else if (agent) todo = { who: 'ai', text: `AI가 작업 중이에요 (${agent.agent === 'planner' ? '장면 계획·녹화 준비' : '구간·속도 정하기'})`, since: agent.started_at, detail: '끝나면 이 화면에 다음 할 일이 나와요. 그동안 Claude Code 창을 닫지 않아요.' };
+  else if (next.next === 'APPROVAL_PLAN') todo = { who: 'me', text: '녹화본을 보고 승인하거나 고칠 점을 적어요', page: 'approve/plan' };
+  else if (next.next === 'APPROVAL_FINAL') todo = { who: 'me', text: '완성본을 보고 승인하거나 고칠 점을 적어요. 직접 다듬어도 돼요', page: 'approve/final', edit: true };
+  else if (next.next === 'DONE') todo = { who: 'done', text: '완성됐어요', detail: `runs/${project}/export/` };
+  else if (!started) todo = { who: 'me', text: 'Claude Code에 말해서 시작해요', say: `${project} 하네스 시작해줘` };
+  else todo = { who: 'ai', text: 'AI 차례예요. Claude Code에 말하면 이어서 진행해요', say: `${project} 이어서 해줘`, detail: next.reason };
+  const doneCount = stages.filter((s) => s.state === 'done').length;
+  return { project, url: conf.url, title: conf.title ?? null, current, stages, todo, next: next.next, reason: next.reason, done: doneCount, total: stages.length };
+}

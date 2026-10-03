@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>에셋 편집</title>
+<script src="/ui/lucide.js"></script>
 <style>
   :root {
     --ui-bg: #141517; --panel: #1d1f22; --panel-2: #272a2e; --line: #33373c; --text: #eceef0; --dim: #9aa0a8;
@@ -36,7 +37,9 @@
   .pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
 
   /* 도움말 툴팁: ⓘ 위에 올리거나 Tab으로 가면 보인다 */
-  .info { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--dim); color: var(--dim); font: 700 10px/1 sans-serif; cursor: help; vertical-align: middle; }
+  .info { position: relative; display: inline-grid; place-items: center; color: var(--dim); cursor: help; vertical-align: middle; }
+  .icon { display: inline-block; vertical-align: -3px; flex: none; }
+  button .icon + span, button .icon { pointer-events: none; }
   .info::after { content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 260px; padding: 8px 10px; border-radius: 8px; background: #000; color: #fff; font: 12px/1.5 -apple-system, "Apple SD Gothic Neo", sans-serif; white-space: normal; box-shadow: 0 6px 20px rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 30; }
   .info:hover::after, .info:focus::after { opacity: 1; }
 
@@ -155,9 +158,9 @@
   </div>
   <nav class="steps" aria-label="진행 단계" id="steps"></nav>
   <div class="grow"></div>
-  <button class="ghost" id="undo" title="실행 취소 (⌘Z)">↶ 실행 취소</button>
-  <button class="ghost" id="redo" title="다시 실행 (⇧⌘Z)">↷ 다시 실행</button>
-  <button class="icon ghost" id="help" title="사용 방법" aria-label="사용 방법 보기">?</button>
+  <button class="ghost" id="undo" title="실행 취소 (⌘Z)">실행 취소</button>
+  <button class="ghost" id="redo" title="다시 실행 (⇧⌘Z)">다시 실행</button>
+  <button class="icon ghost" id="help" title="사용 방법" aria-label="사용 방법 보기"></button>
   <span id="syncState"></span>
   <div class="export-wrap" id="exportWrap">
     <button class="primary" id="build">내보내기</button>
@@ -165,14 +168,14 @@
 </div>
 <div class="workspace" id="ws">
   <aside class="box list" aria-label="게시물 순서">
-    <div class="box-head">게시물 순서 <span class="info" tabindex="0" data-tip="인스타그램에서 위에서부터(왼쪽으로 넘기는 순서) 보여요. 선택한 뒤 오른쪽 패널의 ↑ ↓로 순서를 바꿀 수 있어요.">i</span><span class="grow"></span><span class="hint" id="countHint"></span></div>
+    <div class="box-head">게시물 순서 <span class="info" tabindex="0" data-tip="인스타그램에서 위에서부터(왼쪽으로 넘기는 순서) 보여요. 선택한 뒤 오른쪽 패널의 ↑ ↓로 순서를 바꿀 수 있어요."></span><span class="grow"></span><span class="hint" id="countHint"></span></div>
     <div class="items" id="strip"></div>
     <div class="add" id="add"></div>
   </aside>
   <section class="box stagebox" aria-label="미리보기">
     <div class="toolbar">
       <div class="seg" role="tablist" aria-label="보기 방식" id="viewTabs"></div>
-      <span class="info" tabindex="0" data-tip="편집 미리보기: 원본 영상을 실제 배치대로 브라우저에서 보여 줘요. 내보낸 파일: 마지막으로 내보낸 mp4·png예요.">i</span>
+      <span class="info" tabindex="0" data-tip="편집 미리보기: 원본 영상을 실제 배치대로 브라우저에서 보여 줘요. 내보낸 파일: 마지막으로 내보낸 mp4·png예요."></span>
       <span class="grow"></span>
       <span class="hint" id="viewHint"></span>
     </div>
@@ -198,7 +201,17 @@ const h = (tag, attrs = {}, ...kids) => {
   for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid);
   return el;
 };
-const info = (tip) => h('span', { class: 'info', tabindex: '0', 'data-tip': tip }, 'i');
+// 아이콘은 Lucide만 쓴다 (/ui/lucide.js). 이름은 lucide.dev의 kebab-case
+function icon(name, size = 16) {
+  const key = name.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('');
+  const node = window.lucide?.icons?.[key];
+  if (!node) return null;
+  const el = window.lucide.createElement(node);
+  el.setAttribute('width', size); el.setAttribute('height', size); el.setAttribute('aria-hidden', 'true');
+  el.classList.add('icon');
+  return el;
+}
+const info = (tip) => h('span', { class: 'info', tabindex: '0', 'data-tip': tip, 'aria-label': tip }, icon('info', 14));
 const r2 = (v) => Math.round(v * 100) / 100;
 const nn = (n) => String(n).padStart(2, '0');
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -228,7 +241,7 @@ let savedAt = null;
 const history = { undo: [], redo: [], stable: null, last: 0 };
 
 const recOf = (name) => S.recordings.find((r) => r.name === name);
-const rawUrl = (name) => { const r = recOf(name); return r ? `/files/raw/${r.file}?v=${(r.sha || '').slice(0, 8)}` : ''; };
+const rawUrl = (name) => { const r = recOf(name); return r ? `files/raw/${r.file}?v=${(r.sha || '').slice(0, 8)}` : ''; };
 const seconds = (a) => r2((a.out - a.in) / (a.speed || 1));
 const frame = () => 1 / S.fps;
 const typeName = (a) => (a.type === 'video' ? '영상' : `이미지 · 화면 ${S.layouts[a.layout].slots.length}개`);
@@ -238,7 +251,7 @@ const duplicates = () => { const seen = new Map(); const dup = new Set(); for (c
 const pendingCount = () => E.assets.filter((a) => !S.built[a.n]?.current).length;
 
 function toast(msg, bad = false) {
-  const t = h('div', { class: `toast${bad ? ' bad' : ''}`, role: 'status' }, msg);
+  const t = h('div', { class: `toast${bad ? ' bad' : ''}`, role: 'status' }, icon(bad ? 'circle-alert' : 'circle-check', 16), ' ', msg);
   document.body.append(t);
   setTimeout(() => t.remove(), 2800);
 }
@@ -269,7 +282,7 @@ function changed({ structure = false } = {}) {
 }
 async function save() {
   try {
-    S = { ...(await api('PUT', '/api/edits', E)), edits: undefined };
+    S = { ...(await api('PUT', 'api/edits', E)), edits: undefined };
     history.stable = JSON.stringify(E);
     savedAt = new Date();
     renderTop(); refreshBadges(); renderPanelTabs();
@@ -285,6 +298,10 @@ function restore(json) {
 function undo() { if (!history.undo.length) return; history.redo.push(JSON.stringify(E)); restore(history.undo.pop()); }
 function redo() { if (!history.redo.length) return; history.undo.push(JSON.stringify(E)); restore(history.redo.pop()); }
 function renderUndo() { $('#undo').disabled = !history.undo.length; $('#redo').disabled = !history.redo.length; }
+document.querySelectorAll('span.info:empty').forEach((el) => el.append(icon('info', 14)));
+$('#undo').prepend(icon('undo-2', 15), ' ');
+$('#redo').prepend(icon('redo-2', 15), ' ');
+$('#help').append(icon('circle-question-mark', 17));
 $('#undo').addEventListener('click', undo);
 $('#redo').addEventListener('click', redo);
 
@@ -306,7 +323,7 @@ function liveSlots(a, { big = false } = {}) {
 }
 function fileView(a) {
   const b = S.built[a.n];
-  const src = `/files/export/${b.file}?v=${b.hash}`;
+  const src = `files/export/${b.file}?v=${b.hash}`;
   return a.type === 'video' ? h('video', { class: 'file', src, muted: true, loop: true, autoplay: true, playsinline: true }) : h('img', { class: 'file', src, alt: `${nn(a.n)} 내보낸 파일` });
 }
 setInterval(() => {
@@ -336,11 +353,11 @@ function renderSync() {
   const n = pendingCount();
   const save = savedAt === 'fail' ? h('span', { class: 'bad-text hint' }, '저장 실패') : savedAt ? h('span', { class: 'hint', title: '편집 내용은 자동 저장돼요 (edits.json)' }, `자동 저장됨 ${savedAt.toTimeString().slice(0, 5)}`) : h('span', { class: 'hint' }, '저장 중…');
   el.replaceChildren(h('div', { style: 'display:flex;flex-direction:column;align-items:flex-end;line-height:1.3' },
-    n ? h('span', { class: 'unsynced', title: '편집은 저장됐지만 mp4·png 파일에는 아직 반영되지 않았어요' }, `파일 미반영 ${n}개`) : h('span', { class: 'synced' }, '✓ 파일에 모두 반영됨'),
+    n ? h('span', { class: 'unsynced', title: '편집은 저장됐지만 mp4·png 파일에는 아직 반영되지 않았어요' }, `파일 미반영 ${n}개`) : h('span', { class: 'synced' }, icon('check', 13), ' 파일에 모두 반영됨'),
     save));
   const btn = $('#build');
   if (btn.dataset.busy) return;
-  btn.replaceChildren('내보내기', n ? h('span', { class: 'count' }, String(n)) : '');
+  btn.replaceChildren(icon('file-output', 16), ' 내보내기', n ? h('span', { class: 'count' }, String(n)) : '');
   btn.disabled = S.errors.length > 0;
   btn.title = S.errors.length ? '확인이 필요한 항목을 먼저 고쳐 주세요 (자동 검사 탭)' : '편집 내용을 mp4·png 파일로 만들고 자동 검사를 실행해요';
 }
@@ -351,11 +368,11 @@ function renderSteps() {
   const s1 = n || !S.gate ? 'now' : 'done';
   const s2 = done2 ? 'done' : n ? '' : 'now';
   const s3 = next === 'DONE' ? 'done' : done2 && next === 'APPROVAL_FINAL' ? 'now' : '';
-  const step = (cls, i, label, tip) => h('span', { class: `step ${cls}`, title: tip }, h('i', {}, cls === 'done' ? '✓' : i), label);
+  const step = (cls, i, label, tip) => h('span', { class: `step ${cls}`, title: tip }, h('i', {}, cls === 'done' ? icon('check', 12) : i), label);
   $('#steps').replaceChildren(
     step(s1, 1, '편집', '구간·속도·배경색을 고쳐요. 자동 저장돼요'), h('span', { class: 'sep' }),
     step(s2, 2, '내보내기·검사', '내보내기를 눌러 파일을 만들고 자동 검사를 통과해요'), h('span', { class: 'sep' }),
-    step(s3, 3, '최종 승인', 'Claude Code에 "완성본 승인"이라고 말하면 끝나요'));
+    step(s3, 3, '최종 승인', '완성본 확인 화면에서 승인하거나 Claude Code에 "완성본 승인"이라고 말하면 끝나요'));
 }
 function renderTop() {
   $('#title').textContent = `${S.title} — 에셋 편집`;
@@ -380,12 +397,12 @@ function openHelp() {
   const close = () => { scrim.remove(); d.remove(); $('#help').focus(); };
   const scrim = h('div', { class: 'scrim', onclick: close });
   const d = h('aside', { class: 'drawer', role: 'dialog', 'aria-label': '사용 방법' },
-    h('div', { class: 'row' }, h('h2', { style: 'margin:0' }, '사용 방법'), h('span', { class: 'grow' }), h('button', { class: 'icon ghost', 'aria-label': '닫기', onclick: close }, '✕')),
+    h('div', { class: 'row' }, h('h2', { style: 'margin:0' }, '사용 방법'), h('span', { class: 'grow' }), h('button', { class: 'icon ghost', 'aria-label': '닫기', onclick: close }, icon('x', 18))),
     h('h3', {}, '순서'),
     h('ol', {},
       h('li', {}, h('b', {}, '편집'), ' — 왼쪽에서 에셋을 고르고, 아래 타임라인에서 구간을, 오른쪽 패널에서 속도·화면 수를 바꿔요. 오른쪽 패널의 "전체 스타일" 탭에서 배경색·테두리를 바꿔요. 모두 자동 저장돼요.'),
       h('li', {}, h('b', {}, '내보내기'), ' — 오른쪽 위 버튼을 누르면 mp4·png 파일이 만들어지고 자동 검사가 돌아요. 숫자는 아직 파일에 반영되지 않은 에셋 수예요.'),
-      h('li', {}, h('b', {}, '최종 승인'), ' — 결과가 마음에 들면 Claude Code에 "', S.project, ' 완성본 승인"이라고 말해요. 마지막으로 내보낸 파일이 승인돼요.')),
+      h('li', {}, h('b', {}, '최종 승인'), ' — 결과가 마음에 들면 완성본 확인 화면에서 승인하거나 Claude Code에 "', S.project, ' 완성본 승인"이라고 말해요. 마지막으로 내보낸 파일이 승인돼요.')),
     h('h3', {}, '에셋 표시'),
     h('dl', {},
       h('dt', {}, h('span', { class: 'pill ok' }, '반영됨')), h('dd', {}, '파일이 지금 편집 내용과 같아요'),
@@ -425,8 +442,8 @@ function renderStrip() {
   }));
   const src = S.recordings[0]?.name;
   $('#add').replaceChildren(
-    h('button', { disabled: !src, title: '맨 뒤에 영상 에셋을 추가해요', onclick: () => addAsset({ type: 'video', layout: 'single', source: src, in: 0, out: r2(Math.min(recOf(src).duration, 8)), speed: 1, loop: null }) }, '+ 영상'),
-    h('button', { disabled: !src, title: '맨 뒤에 이미지 에셋을 추가해요', onclick: () => addAsset({ type: 'image', layout: 'single', shots: [{ source: src, at: 0 }] }) }, '+ 이미지'));
+    h('button', { disabled: !src, title: '맨 뒤에 영상 에셋을 추가해요', onclick: () => addAsset({ type: 'video', layout: 'single', source: src, in: 0, out: r2(Math.min(recOf(src).duration, 8)), speed: 1, loop: null }) }, icon('video', 14), ' 영상'),
+    h('button', { disabled: !src, title: '맨 뒤에 이미지 에셋을 추가해요', onclick: () => addAsset({ type: 'image', layout: 'single', shots: [{ source: src, at: 0 }] }) }, icon('image', 14), ' 이미지'));
 }
 function refreshBadges() { const dup = duplicates(); for (const a of E.assets) { const el = $(`[data-badge="${a.n}"]`); if (el) el.replaceChildren(badge(a, dup)); } }
 function renumber() { E.assets.forEach((a, i) => { a.n = i + 1; }); }
@@ -453,7 +470,7 @@ function renderStage() {
 }
 function renderTransport() {
   const btn = $('#play');
-  if (btn) { btn.textContent = paused ? '▶' : '❚❚'; btn.setAttribute('aria-label', paused ? '재생' : '일시정지'); }
+  if (btn) { btn.replaceChildren(icon(paused ? 'play' : 'pause', 16)); btn.setAttribute('aria-label', paused ? '재생' : '일시정지'); }
 }
 
 // ---- 오른쪽 패널 ----
@@ -487,9 +504,9 @@ function renderPanel() {
   box.replaceChildren(
     h('div', { class: 'section' },
       h('div', { class: 'row' }, h('strong', { style: 'font-size:15px' }, `${nn(a.n)} ${typeName(a)}`), h('span', { class: 'grow' }),
-        h('button', { class: 'icon ghost', onclick: () => move(-1), disabled: sel === 0, title: '순서 앞으로', 'aria-label': '순서 앞으로' }, '↑'),
-        h('button', { class: 'icon ghost', onclick: () => move(1), disabled: sel === E.assets.length - 1, title: '순서 뒤로', 'aria-label': '순서 뒤로' }, '↓'),
-        h('button', { class: 'danger', onclick: del }, '삭제')),
+        h('button', { class: 'icon ghost', onclick: () => move(-1), disabled: sel === 0, title: '순서 앞으로', 'aria-label': '순서 앞으로' }, icon('arrow-up', 16)),
+        h('button', { class: 'icon ghost', onclick: () => move(1), disabled: sel === E.assets.length - 1, title: '순서 뒤로', 'aria-label': '순서 뒤로' }, icon('arrow-down', 16)),
+        h('button', { class: 'danger', onclick: del }, icon('trash-2', 14), ' 삭제')),
       a.scene && h('div', { class: 'hint' }, a.scene),
       duplicates().has(a.n) && h('div', { class: 'banner', role: 'alert' }, '다른 에셋과 원본·구간이 같아요. 아래 타임라인에서 구간을 바꾸거나 하나를 삭제해 주세요.')),
     ...(a.type === 'video' ? videoPanel(a) : imagePanel(a)));
@@ -506,8 +523,8 @@ function videoPanel(a) {
     changed();
   };
   const seamOut = h('span', { class: 'hint' });
-  const measure = async () => { clearTimeout(saveTimer); await save(); try { const r = await api('GET', `/api/seam?n=${a.n}`); seamOut.textContent = `이음새 ${r.psnr}dB — ${r.psnr >= S.limits.loopPsnrMin ? '자연스러워요' : `${S.limits.loopPsnrMin}dB 이상이어야 자연스러워요`}`; seamOut.className = r.psnr >= S.limits.loopPsnrMin ? 'ok-text' : 'bad-text'; } catch (e) { seamOut.textContent = e.message; } };
-  const scan = async () => { clearTimeout(saveTimer); await save(); seamOut.textContent = '찾는 중…'; try { const r = await api('GET', `/api/seam?n=${a.n}&scan=1`); if (r.best) { a.in = r.best.in; a.out = r.best.out; changed({ structure: true }); toast(`시작 지점을 ${fmt(r.best.in)}로 옮겼어요 (${r.best.psnr}dB)`); } } catch (e) { seamOut.textContent = e.message; } };
+  const measure = async () => { clearTimeout(saveTimer); await save(); try { const r = await api('GET', `api/seam?n=${a.n}`); seamOut.textContent = `이음새 ${r.psnr}dB — ${r.psnr >= S.limits.loopPsnrMin ? '자연스러워요' : `${S.limits.loopPsnrMin}dB 이상이어야 자연스러워요`}`; seamOut.className = r.psnr >= S.limits.loopPsnrMin ? 'ok-text' : 'bad-text'; } catch (e) { seamOut.textContent = e.message; } };
+  const scan = async () => { clearTimeout(saveTimer); await save(); seamOut.textContent = '찾는 중…'; try { const r = await api('GET', `api/seam?n=${a.n}&scan=1`); if (r.best) { a.in = r.best.in; a.out = r.best.out; changed({ structure: true }); toast(`시작 지점을 ${fmt(r.best.in)}로 옮겼어요 (${r.best.psnr}dB)`); } } catch (e) { seamOut.textContent = e.message; } };
   const periods = h('input', { type: 'text', value: (a.loop?.periods || []).join(', '), placeholder: '예: 3, 2', 'aria-label': '화면 애니메이션 주기(초)', style: 'width:100px', onchange: (e) => {
     const p = e.target.value.split(',').map((x) => Number(x.trim())).filter((x) => x > 0);
     a.loop = p.length ? { periods: p } : null;
@@ -579,7 +596,7 @@ function checkView() {
     return h('div', { class: 'item' },
       h('span', {}, name, ' ', info(desc)),
       h('span', { class: r.pass ? 'ok-text' : human ? 'hint' : 'bad-text' }, r.pass ? '통과' : human ? '대기 중' : '실패'),
-      !r.pass && h('div', { class: 'd' }, human ? `결과가 마음에 들면 Claude Code에 "${S.project} 완성본 승인"이라고 말해 주세요` : r.detail.join(' · ')));
+      !r.pass && h('div', { class: 'd' }, human ? `결과가 마음에 들면 완성본 확인 화면에서 승인해요 (Claude Code에 "${S.project} 완성본 승인"이라고 말해도 돼요)` : r.detail.join(' · ')));
   })));
   return out;
 }
@@ -591,7 +608,7 @@ function renderDock() {
   const dock = $('#dock');
   if (!a) { keyHandlers = {}; dock.replaceChildren(); return; }
   const srcs = [...new Set(a.type === 'video' ? [a.source] : a.shots.map((s) => s.source))];
-  const sheets = srcs.map((name) => h('details', {}, h('summary', {}, `장면 한눈에 보기 — ${name} (${recOf(name).sheet_every}초 간격)`), h('img', { class: 'sheet', loading: 'lazy', src: `/files/raw/${recOf(name).sheet}`, alt: `${name} 장면 모음` })));
+  const sheets = srcs.map((name) => h('details', {}, h('summary', {}, `장면 한눈에 보기 — ${name} (${recOf(name).sheet_every}초 간격)`), h('img', { class: 'sheet', loading: 'lazy', src: `files/raw/${recOf(name).sheet}`, alt: `${name} 장면 모음` })));
   if (a.type === 'video') {
     dock.replaceChildren(h('div', { class: 'box-head', style: 'padding-left:0' }, '구간 자르기', info('파란 구간만 결과에 쓰여요. 양끝을 끌어 조절하고, 빈 곳을 누르면 그 위치로 이동해요. 노란 눈금은 화면이 바뀌는 지점이라 여기서 자르면 빈 화면이 나올 수 있어요.'), h('span', { class: 'grow' }), h('span', { class: 'hint' }, `원본 ${a.source} · ${fmt(recOf(a.source).duration)}`)), ...videoDock(a), ...sheets,
       h('div', { class: 'shortcuts' }, h('span', {}, h('kbd', {}, 'Space'), ' 재생/일시정지'), h('span', {}, h('kbd', {}, '←'), h('kbd', {}, '→'), ' 한 프레임'), h('span', {}, h('kbd', {}, 'I'), ' 시작 지점'), h('span', {}, h('kbd', {}, 'O'), ' 끝 지점'), h('span', {}, h('kbd', {}, '⌘Z'), ' 실행 취소')));
@@ -684,7 +701,7 @@ $('#build').addEventListener('click', async () => {
   btn.disabled = true; btn.dataset.busy = '1'; btn.replaceChildren('내보내는 중…');
   try {
     clearTimeout(saveTimer); await save();
-    const r = await api('POST', '/api/build');
+    const r = await api('POST', 'api/build');
     S = { ...r.state, edits: undefined };
     if (r.export_code !== 0) { toast('내보내지 못했어요. 자동 검사 탭을 확인해 주세요', true); tab = 'check'; }
     else if (r.judge_code === 0) toast('내보내기 완료 — 자동 검사를 모두 통과했어요');
@@ -694,7 +711,7 @@ $('#build').addEventListener('click', async () => {
 });
 
 (async () => {
-  S = await api('GET', '/api/state');
+  S = await api('GET', 'api/state');
   if (!S.edits) {
     $('#ws').replaceChildren(h('div', { class: 'empty', style: 'grid-column:1/-1' }, `아직 편집할 내용이 없어요. 하네스가 편집 단계를 마치면 여기서 고칠 수 있어요. (지금: ${S.status.reason})`));
     $('#build').disabled = true; $('#undo').disabled = true; $('#redo').disabled = true; $('#help').disabled = true;
@@ -705,6 +722,12 @@ $('#build').addEventListener('click', async () => {
   history.stable = JSON.stringify(E);
   savedAt = new Date();
   applyStyleVars(); renderAll(); coach();
+  // 시작 화면(npm start) 안에서 열었으면 진행 화면과 완성본 확인 화면으로 가는 길을 둔다
+  if (/^\/p\/[^/]+\/edit\//.test(location.pathname)) {
+    const base = location.pathname.replace(/edit\/.*$/, '');
+    $('.topbar').prepend(h('a', { href: base, style: 'color:var(--accent);font-size:13px;white-space:nowrap' }, icon('arrow-left', 14), ' 진행 화면'));
+    $('#exportWrap').before(h('a', { href: `${base}approve/final`, style: 'color:var(--accent);font-size:13px;white-space:nowrap' }, icon('images', 14), ' 완성본 확인'));
+  }
 })().catch((e) => { document.body.append(h('div', { class: 'empty bad-text' }, e.message)); });
 </script>
 </body>

@@ -6,9 +6,11 @@
     "status": "node scripts/run.mjs status",
     "judge": "node scripts/judge.mjs",
     "review": "node scripts/review.mjs",
-    "test": "node scripts/test.mjs"
+    "test": "node scripts/test.mjs",
+    "start": "node scripts/app.mjs"
   },
   "dependencies": {
+    "lucide": "^1.50.0",
     "playwright": "^1.55.0",
     "walkthrough-recorder": "github:tadkim/walkthrough-recorder",
     "yaml": "^2.5.0"

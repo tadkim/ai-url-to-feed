@@ -31,6 +31,7 @@ export async function applyContext(context, rules, conf, counts = { seen: 0, blo
     Object.defineProperty(navigator, 'language', { get: () => l });
     Object.defineProperty(navigator, 'languages', { get: () => [l, l.split('-')[0]] });
   }, locale);
+  const reads = (rules.record.read_post ?? []).map((s) => new RegExp(s));   // 읽기 전용 POST: 세지 않고 통과
   const passes = (conf.allow_post ?? []).map((s) => new RegExp(s));
   if (conf.allow_writes) {
     context.on('request', (req) => { if (WRITE_METHODS.has(req.method())) counts.seen++; });
@@ -38,6 +39,8 @@ export async function applyContext(context, rules, conf, counts = { seen: 0, blo
     await context.route('**/*', (route) => {
       const req = route.request();
       if (!WRITE_METHODS.has(req.method())) return route.continue();
+      const url = req.url().split('?')[0];
+      if (req.method() === 'POST' && reads.some((re) => re.test(url))) return route.continue();
       if (passes.some((re) => re.test(req.url()))) { counts.seen++; return route.continue(); }
       counts.blocked++;
       (counts.blocked_urls ??= new Set()).add(`${req.method()} ${req.url().split('?')[0].slice(0, 120)}`);
@@ -47,11 +50,18 @@ export async function applyContext(context, rules, conf, counts = { seen: 0, blo
   return counts;
 }
 
+// 페이지 열기: load 뒤 네트워크가 잠잠해질 때까지 최대 5초 기다린다.
+// Firestore 실시간 연결처럼 요청이 계속 열려 있는 사이트는 networkidle이 오지 않는다 (stuckyi.studio — 2026-10-03)
+export async function open(page, url) {
+  await page.goto(url, { waitUntil: 'load' });
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+}
+
 // steps: goto(경로) · click(선택자) · fill([선택자, 글자]) · press(키) · wait(ms) · waitFor(선택자) · scroll(px) · scrollTo(선택자) · hover(선택자)
 export async function runSteps(page, steps, baseUrl) {
   for (const s of steps ?? []) {
     const [op, arg] = Object.entries(s)[0];
-    if (op === 'goto') await page.goto(baseUrl + arg, { waitUntil: 'networkidle' });
+    if (op === 'goto') await open(page, baseUrl + arg);
     else if (op === 'click') await page.click(arg);
     else if (op === 'fill') await page.fill(arg[0], arg[1]);
     else if (op === 'press') await page.keyboard.press(arg);

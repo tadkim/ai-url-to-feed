@@ -17,7 +17,7 @@ import { spawnSync } from 'node:child_process';
 import {
   ROOT, RUNS, readJson, readIf, exists, writeJson, now, loadRules, assertProject, derivedPath, loadContext,
   gatesFor, runGates, isHuman, planHash, recordHash, finalHash, editsHash, exportHash, assetHash, assetFile,
-  loadState, saveState, appendLog, readLog, scopeDir, editsErrors, toolProblems, planContentHash,
+  loadState, saveState, appendLog, readLog, scopeDir, editsErrors, toolProblems, planContentHash, snapshotHistory,
 } from './lib.mjs';
 
 const [cmd, project, phaseArg] = process.argv.slice(2);
@@ -57,7 +57,7 @@ export function status(rules, project) {
   if (f.length) return { next: 'P1', todo: 'agent', reason: 'P2 게이트 FAIL — 시나리오를 고친다', failing: f };
 
   // 승인 1: 에셋 목록 + 녹화본
-  if (!human('approval_plan')) return { next: 'APPROVAL_PLAN', reason: st.approved_plan_at ? '승인 뒤 계획·녹화본이 바뀜 — 다시 승인받는다' : '사람 승인 대기 — 에셋 목록과 녹화본(컨택트 시트)을 보여 준다' };
+  if (!human('approval_plan')) return { next: 'APPROVAL_PLAN', reason: st.approved_plan_at ? '승인 뒤 계획·녹화본이 바뀜 — 다시 승인받는다' : '사람 승인 대기 — 에셋 목록과 녹화본을 요약하고, 시작 화면의 녹화 확인(/p/<p>/approve/plan)을 알려 준다' };
 
   // P3 편집값
   if (st.final_rejects > rules.retry.final_reject) return { next: 'STOP', reason: `완성본 거절 ${st.final_rejects}회 — retry.final_reject(${rules.retry.final_reject}) 초과` };
@@ -83,13 +83,13 @@ export function status(rules, project) {
   if (!p4.pass) {
     const p4Failing = p4.results.filter((r) => !r.pass && !isHuman(rules, r.gate));
     const unblocked = after(st.unblocked_at, p4.measured_at);
-    if (p4.next === 'STOP' && !unblocked) return { next: 'STOP', reason: `P4 ${p4.attempt}/${p4.max_attempts}회 FAIL — 사람에게 묻는다 (검토용 HTML에서 직접 고칠 수도 있다)`, failing: p4Failing };
+    if (p4.next === 'STOP' && !unblocked) return { next: 'STOP', reason: `P4 ${p4.attempt}/${p4.max_attempts}회 FAIL — 사람에게 묻는다 (편집 화면에서 직접 고칠 수도 있다)`, failing: p4Failing };
     if (after(st.done.P3, p4.measured_at) && !unblocked) return { next: 'STOP', reason: 'editor가 실행됐지만 edits.json이 바뀌지 않았다', failing: p4Failing };
     return { next: 'P3', todo: 'agent', reason: `P4 FAIL (시도 ${p4.attempt}/${p4.max_attempts}) — failing을 editor에게 넘긴다`, failing: p4Failing };
   }
 
   // 승인 2
-  if (!human('approval_final')) return { next: 'APPROVAL_FINAL', reason: st.approved_final_at ? '승인 뒤 에셋·편집값이 바뀜 — 다시 승인받는다' : '사람 승인 대기 — 검토용 HTML을 열어 준다 (review.mjs)' };
+  if (!human('approval_final')) return { next: 'APPROVAL_FINAL', reason: st.approved_final_at ? '승인 뒤 에셋·편집값이 바뀜 — 다시 승인받는다' : '사람 승인 대기 — 시작 화면의 완성본 확인(/p/<p>/approve/final)을 알려 준다' };
   return { next: 'DONE', reason: '모든 게이트 PASS, 촬영 계획·완성본 승인' };
 }
 
@@ -186,6 +186,7 @@ function reject(rules) {
   const st = loadState(rules, project);
   const note = opt('--note') ?? null;
   const at = now();
+  if (phaseArg === 'plan' || phaseArg === 'final') snapshotHistory(rules, project, phaseArg);   // 다음 승인 화면에서 "이전 ↔ 지금"을 비교한다
   if (phaseArg === 'plan') {
     st.plan_rejects += 1;
     st.plan_rejected_at = at;

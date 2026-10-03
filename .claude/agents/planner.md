@@ -24,6 +24,7 @@ Bash는 아래 두 명령과, plan/ 안에서 쓰지 않게 된 자기 파일을
 - 매번 첫 화면부터 단계를 다시 실행한다. 한 단계씩 늘려 가며 흐름을 따라간다. `step_error`가 나오면 그 단계의 선택자를 고친다.
 - `animations`(이름, 주기 초, 반복)와 `gifs`를 본다. 조작 없이 계속 움직이는 화면은 루프 클립 후보다.
 - `writes_blocked`가 0보다 크면 그 흐름은 백엔드에 쓰려고 한 것이다. plan.json `writes_note`에 어느 단계에서 몇 번인지 적는다.
+- 읽기에 POST를 쓰는 흔한 백엔드(Firestore 읽기, Algolia 검색)는 rules.yaml `record.read_post`로 기본 통과한다. 그래도 목록·본문이 비어 있고 `blocked_urls`에 읽기로 보이는 주소가 있으면 계획을 쓰지 말고 그 주소와 `allow_post` 후보 정규식을 보고에 적는다 (projects.yaml은 사람이 고친다).
 
 ## plan.json
 ```json
@@ -34,7 +35,7 @@ Bash는 아래 두 명령과, plan/ 안에서 쓰지 않게 된 자기 파일을
   ],
   "assets": [
     { "n": 1, "type": "video", "layout": "single", "scene": "첫 화면이 움직이는 모습", "sources": ["r1-home"], "loop": { "periods": [3, 2] } },
-    { "n": 2, "type": "image", "layout": "double", "scene": "목록 화면과 상세 화면", "sources": ["r2-browse"], "loop": false }
+    { "n": 2, "type": "image", "layout": "double", "scene": "목록 화면과 상세 화면", "sources": ["r2-browse"], "loop": false, "cue": 6.5 }
   ]
 }
 ```
@@ -45,6 +46,7 @@ Bash는 아래 두 명령과, plan/ 안에서 쓰지 않게 된 자기 파일을
 - 움직임이 있어야 재미가 보이는 부분(전환, 애니메이션, 결과가 나오는 순간)만 영상으로 한다. 영상 하나에 쓰일 구간은 `export.video.max_seconds` 안에 들어가게 짧게 찍는다.
 - 이미지도 녹화본의 한 순간에서 뽑는다. 이미지로 쓸 화면은 녹화 안에서 1초 이상 멈춰 보이게 `dwell`을 둔다.
 - `loop`: 반복 재생할 클립이면 그 화면에서 도는 모든 애니메이션 주기(초)를 `periods`에 적는다 (explore의 `animations`·GIF 길이). 하나라도 빠지면 이음매에서 튄다. 아니면 false.
+- `cue`: 그 장면이 녹화본에서 보이는 시점(초, 대략). 사람이 녹화 확인 화면에서 "▶ 장면 보기"로 바로 찾아가는 데 쓴다. try.mjs 결과의 장면 모음으로 정한다.
 - 녹화본 1개는 `record.max_raw_seconds` 이하. 흐름이 길면 녹화를 나눈다. 녹화마다 새 브라우저에서 시작한다.
 
 ## 시나리오 (`<이름>.scenario.mjs`)

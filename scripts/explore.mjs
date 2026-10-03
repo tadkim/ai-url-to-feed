@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { ROOT, loadRules, assertProject, projectConf } from './lib.mjs';
-import { assertTarget, applyContext, runSteps } from './browser.mjs';
+import { assertTarget, applyContext, runSteps, open } from './browser.mjs';
 
 async function main() {
   const [project, ...args] = process.argv.slice(2);
@@ -33,7 +33,7 @@ async function main() {
     const ctx = await browser.newContext({ viewport: rules.record.viewport, deviceScaleFactor: 1, locale: rules.record.locale });
     const counts = await applyContext(ctx, rules, conf);
     const page = await ctx.newPage();
-    await page.goto(`${conf.url}/`, { waitUntil: 'networkidle' });
+    await open(page, `${conf.url}/`);
     try {
       await runSteps(page, steps, conf.url);
     } catch (e) {

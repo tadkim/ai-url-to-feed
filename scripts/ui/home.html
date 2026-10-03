@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai-url-to-feed</title>
+<link rel="stylesheet" href="/ui/base.css">
+<script src="/ui/lucide.js"></script>
+<style>
+  .wrap { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; padding: 18px 22px 40px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .proj { text-align: left; background: var(--panel); border: 2px solid transparent; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .proj.sel { border-color: var(--accent); }
+  .proj b { font-size: 14px; }
+  .proj .u { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hero { max-width: 720px; margin: 9vh auto 0; text-align: center; display: flex; flex-direction: column; gap: 18px; padding: 0 22px; }
+  .hero h2 { font-size: 30px; margin: 0; letter-spacing: -.5px; }
+  .hero h2 b { color: var(--accent); }
+  .urlform { display: flex; gap: 8px; }
+  .urlform input { font-size: 16px; padding: 14px 16px; }
+  .urlform button { padding: 0 22px; font-size: 15px; }
+  .main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .head h2 { margin: 0; font-size: 20px; }
+  .steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+  @media (max-width: 900px) { .steps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .step { background: var(--panel); border: 2px solid transparent; border-radius: 12px; padding: 10px 10px 12px; text-align: left; display: flex; flex-direction: column; gap: 6px; }
+  .step .ic { width: 26px; flex: none; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: var(--panel-2); color: var(--dim); }
+  .step .t { font-size: 13px; font-weight: 600; }
+  .step .w { font-size: 11px; color: var(--dim); }
+  .step.done .ic { background: var(--ok); color: #082414; }
+  .step.now { border-color: var(--accent); }
+  .step.now .ic { background: var(--accent); color: var(--accent-ink); }
+  .step.stopped { border-color: var(--bad); }
+  .step.stopped .ic { background: var(--bad); color: #2a0806; }
+  .step.optional .ic { border: 1px dashed var(--dim); background: none; }
+  .step.view { outline: 2px solid var(--line); outline-offset: 2px; }
+  .detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 14px; }
+  @media (max-width: 900px) { .detail { grid-template-columns: 1fr; } }
+  .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .checks li { display: grid; grid-template-columns: 22px 1fr; gap: 2px 8px; }
+  .checks .m { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; background: var(--panel-2); color: var(--dim); }
+  .checks .m.y { background: var(--ok); color: #082414; }
+  .checks .d { grid-column: 2; color: var(--dim); font-size: 12px; overflow-wrap: anywhere; }
+  .nowcard { display: flex; flex-direction: column; gap: 12px; }
+  .nowcard .who { font-size: 12px; font-weight: 700; }
+  .nowcard .who.me { color: var(--accent); } .nowcard .who.ai { color: var(--ai); } .nowcard .who.done { color: var(--ok); }
+  .nowcard .big { font-size: 17px; font-weight: 600; }
+  .nowcard .reason { background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad); border-radius: 8px; padding: 8px 12px; font-size: 13px; overflow-wrap: anywhere; }
+  .nowcard .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .nowcard .actions a.btn { display: inline-flex; align-items: center; gap: 4px; padding: 9px 16px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 700; text-decoration: none; }
+  .nowcard .actions a.btn.sub { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); font-weight: 400; }
+  .tip { font-size: 12px; color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>ai-url-to-feed</h1>
+  <span class="hint">URL만 넣으면 인스타그램 3:4 영상·이미지</span>
+  <span class="grow"></span>
+  <button class="ghost" id="recheck" title="실행 환경과 사이트 응답을 다시 확인해요">다시 확인</button>
+  <a id="help" href="https://github.com/tadkim/ai-url-to-feed#readme" target="_blank" rel="noopener">사용 방법</a>
+</div>
+<div id="root"></div>
+
+<script type="module">
+import { $, h, api, toast, sayBox, projectFromPath, icon } from '/ui/common.js';
+
+let data = null;
+let sel = projectFromPath();
+let viewStage = null;   // 사용자가 눌러서 보고 있는 단계 (없으면 지금 단계)
+const WHO_IC = { me: 'user', ai: 'bot', computer: 'monitor', done: 'circle-check' };
+const WHO_TX = { me: '내 차례', ai: 'AI 차례', computer: '컴퓨터', done: '완료' };
+const who = (w, size = 13) => [icon(WHO_IC[w], size), ' ', WHO_TX[w] ?? ''];
+const STATE_IC = { done: 'check', now: 'circle-dot', stopped: 'triangle-alert' };
+
+function urlForm(big) {
+  const input = h('input', { type: 'url', placeholder: 'https://내사이트.com', 'aria-label': '녹화할 웹사이트 주소', required: true });
+  const label = () => [big ? '시작하기' : '추가', ' ', icon('arrow-right', 16)];
+  const btn = h('button', { class: 'primary', type: 'submit' }, label());
+  const form = h('form', { class: 'urlform', onsubmit: async (e) => {
+    e.preventDefault();
+    btn.disabled = true; btn.textContent = '확인 중…';
+    try {
+      const r = await api('POST', '/api/projects', { url: input.value });
+      toast(r.existed ? `이미 등록된 사이트예요 (${r.name})` : `${r.name}(으)로 등록했어요`);
+      sel = r.name; viewStage = null;
+      history.replaceState(null, '', `/p/${r.name}/`);
+      await load();
+    } catch (err) { toast(err.message, true); }
+    finally { btn.disabled = false; btn.replaceChildren(...label()); }
+  } }, input, btn);
+  return form;
+}
+
+function render() {
+  const root = $('#root');
+  if (!data.projects.length) {
+    root.replaceChildren(h('div', { class: 'hero' },
+      h('h2', {}, h('b', {}, 'URL'), '만 넣으면, 인스타그램 게시물이 나와요'),
+      h('p', { class: 'hint', style: 'font-size:14px;margin:0' }, '녹화할 웹사이트 주소를 넣어 주세요. 배포된 사이트도, 내 컴퓨터의 개발 서버(localhost)도 돼요.'),
+      urlForm(true),
+      envNotice()));
+    return;
+  }
+  if (!sel || !data.projects.find((p) => p.project === sel)) sel = data.projects[0].project;
+  const p = data.projects.find((x) => x.project === sel);
+  root.replaceChildren(h('div', { class: 'wrap' },
+    h('aside', { class: 'list' },
+      data.projects.map((x) => h('button', { class: `proj${x.project === sel ? ' sel' : ''}`, onclick: () => { sel = x.project; viewStage = null; history.replaceState(null, '', `/p/${x.project}/`); render(); } },
+        h('div', { class: 'row' }, h('b', {}, x.project), h('span', { class: 'grow' }), h('span', { class: 'hint' }, `${x.done}/${x.total}`)),
+        h('span', { class: 'u' }, x.url.replace(/^https?:\/\//, '')),
+        h('div', { class: 'bar' }, h('i', { style: `width:${(x.done / x.total) * 100}%` })),
+        h('span', { class: `pill ${x.next === 'STOP' ? 'bad' : x.todo.who === 'me' ? 'warn' : x.todo.who === 'done' ? 'ok' : 'ai'}`, style: 'align-self:flex-start' }, x.next === 'STOP' ? '멈춤' : x.todo.who === 'me' ? '내 차례' : x.todo.who === 'done' ? '완성' : 'AI 차례'))),
+      h('details', { class: 'card', style: 'padding:12px 14px' }, h('summary', { style: 'cursor:pointer' }, icon('plus', 14), ' 새 사이트'), h('div', { style: 'margin-top:10px' }, urlForm(false)))),
+    projectView(p)));
+}
+
+function envNotice() {
+  if (!data.env.tools.length && data.env.chromium) return null;
+  return h('div', { class: 'card', style: 'text-align:left' }, h('b', { class: 'bad-text' }, '실행 환경을 먼저 준비해야 해요'),
+    h('ul', {}, data.env.tools.map((t) => h('li', {}, t)), !data.env.chromium && h('li', {}, '녹화용 브라우저: npx playwright install chromium')));
+}
+
+function projectView(p) {
+  const shown = p.stages.find((s) => s.id === (viewStage ?? p.current));
+  return h('section', { class: 'main' },
+    h('div', { class: 'head' },
+      h('h2', {}, p.project),
+      h('a', { href: p.url, target: '_blank', rel: 'noopener', class: 'hint' }, p.url.replace(/^https?:\/\//, '')),
+      h('span', { class: 'grow' }),
+      h('span', { class: 'hint' }, `${p.done}/${p.total} 단계`),
+      h('div', { class: 'bar', style: 'width:180px' }, h('i', { style: `width:${(p.done / p.total) * 100}%` }))),
+    h('div', { class: 'steps', role: 'list' }, p.stages.map((s) => h('button', {
+      class: `step ${s.state}${viewStage === s.id ? ' view' : ''}`, role: 'listitem', 'aria-current': s.id === p.current ? 'step' : null,
+      onclick: () => { viewStage = viewStage === s.id || s.id === p.current ? null : s.id; render(); },
+    }, h('span', { class: 'ic' }, STATE_IC[s.state] ? icon(STATE_IC[s.state], 15) : s.id), h('span', { class: 't' }, `${s.id}. ${s.title}`),
+      h('span', { class: 'w' }, s.state === 'now' ? [icon('arrow-left', 12), ' 지금 여기'] : s.state === 'stopped' ? '멈춤' : s.optional ? '선택' : who(s.who, 12))))),
+    h('div', { class: 'detail' },
+      h('div', { class: 'card' }, h('h2', {}, `${shown.id}. ${shown.title}`, ' ', h('span', { class: 'hint' }, shown.id === p.current ? '— 지금 단계' : '')),
+        h('ul', { class: 'checks' }, shown.checks.map((c) => h('li', {}, h('span', { class: `m${c.done ? ' y' : ''}` }, c.done ? icon('check', 12) : ''), h('span', {}, c.label), c.detail && h('span', { class: 'd' }, c.detail))))),
+      todoCard(p)));
+}
+
+function todoCard(p) {
+  const t = p.todo;
+  const elapsed = t.since ? Math.max(1, Math.round((Date.now() - Date.parse(t.since)) / 60000)) : null;
+  return h('div', { class: 'card nowcard' },
+    h('span', { class: `who ${t.who}` }, '지금 할 일 · ', who(t.who, 13)),
+    h('div', { class: 'big' }, t.who === 'ai' && t.since ? [h('span', { class: 'spinner' }), ' '] : null, t.text, elapsed ? h('span', { class: 'hint' }, ` (${elapsed}분째)`) : null),
+    p.next === 'STOP' && t.detail ? h('div', { class: 'reason' }, t.detail) : t.detail && h('div', { class: 'hint', style: 'overflow-wrap:anywhere' }, t.detail),
+    t.say && [sayBox(t.say), h('div', { class: 'tip' }, '이 폴더에서 연 Claude Code 창에 붙여 넣어요. (터미널에서 ', h('code', {}, 'claude'), ' 실행)')],
+    (t.page || t.edit || t.who === 'done' || t.link) && h('div', { class: 'actions' },
+      t.page && h('a', { class: 'btn', href: `/p/${p.project}/${t.page}` }, icon(t.page === 'approve/plan' ? 'clapperboard' : 'images', 16), ' ', t.page === 'approve/plan' ? '녹화 확인하러 가기' : '완성본 확인하러 가기'),
+      t.edit && h('a', { class: 'btn sub', href: `/p/${p.project}/edit/` }, icon('sliders-horizontal', 16), ' 편집 화면에서 다듬기'),
+      t.who === 'done' && [
+        h('button', { class: 'primary', onclick: async () => { await api('POST', `/api/projects/${p.project}/open-export`); toast('결과 폴더를 열었어요'); } }, icon('folder-open', 16), ' 결과 폴더 열기'),
+        h('a', { class: 'btn sub', href: `/p/${p.project}/approve/final` }, icon('images', 16), ' 완성본 다시 보기')],
+      t.link && h('a', { class: 'btn sub', href: `/${t.link}`, target: '_blank', rel: 'noopener' }, icon('life-buoy', 16), ' 문제 해결 보기')),
+    (t.page && t.who === 'me') && h('div', { class: 'tip' }, '승인·거절은 화면에서 해도 되고, Claude Code에 말해도 돼요.'));
+}
+
+async function load(recheck = false) {
+  try { data = await api('GET', `/api/projects${recheck ? '?recheck=1' : ''}`); render(); }
+  catch (e) { $('#root').replaceChildren(h('div', { class: 'empty bad-text' }, e.message)); }
+}
+$('.topbar h1').prepend(icon('clapperboard', 18), ' ');
+$('#recheck').prepend(icon('refresh-cw', 14), ' ');
+$('#help').prepend(icon('book-open', 14), ' ');
+$('#recheck').addEventListener('click', async () => { await load(true); toast('다시 확인했어요'); });
+await load();
+// 3초마다 진행 상황을 새로 읽는다. 주소를 입력하는 중이거나 새 사이트 칸을 연 동안은 화면을 다시 그리지 않는다
+setInterval(() => { if (!document.querySelector('form input:focus, details[open]')) load(); }, 3000);
+</script>
+</body>
+</html>

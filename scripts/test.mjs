@@ -173,15 +173,25 @@ eq(L.readJson(L.derivedPath(rules, P, 'p4')).attempt, 2, '같은 내용은 세�
 // 승인 2와 무효화
 putEdits(edits); node('export.mjs', P); node('judge.mjs', P, '--phase', 'P4');
 eq(node('run.mjs', 'approve', P, 'final').json?.next, 'DONE', '승인 2 → DONE');
+const prog = () => L.progress(rules, P, L.loadState(rules, P), status());
+eq([prog().current, prog().todo.who], [7, 'done'], '진행 화면: 승인 2 뒤 7단계 완성');
 const tweak = structuredClone(edits); tweak.style.bg = '#112233';
 putEdits(tweak);
 eq(status().next, 'P4', '승인 뒤 편집값이 바뀌면 다시');
 node('export.mjs', P); node('judge.mjs', P, '--phase', 'P4');
 eq(status().next, 'APPROVAL_FINAL', '다시 승인받는다');
 eq(node('run.mjs', 'reject', P, 'final', '--note', '더 빠르게').json?.next, 'P3', '완성본 거절 → P3');
+ok(L.latestHistory(P, 'final'), '완성본 거절 → 이전 결과를 비교용으로 남긴다');
+eq([prog().current, prog().todo.say], [5, `${P} 이어서 해줘`], '진행 화면: 거절 뒤 5단계, 이어서 해줘 안내');
 node('run.mjs', 'begin', P, 'P3'); node('run.mjs', 'end', P, 'P3');
 eq(status().next, 'STOP', '거절 뒤 editor가 아무것도 바꾸지 않으면 승인 대기로 넘기지 않는다');
 eq(node('run.mjs', 'unblock', P).json?.next, 'P3', '계속 진행해 → editor 다시');
+
+// 쓰기 차단에서 통과시키는 읽기 전용 POST
+const readPost = (u) => rules.record.read_post.some((x) => new RegExp(x).test(u));
+ok(readPost('https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel'), '읽기 POST: Firestore Listen은 통과');
+ok(!readPost('https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel'), '쓰기 POST: Firestore Write는 막는다');
+ok(!readPost('https://firestore.googleapis.com/v1/projects/p/databases/(default)/documents:commit'), '쓰기 POST: Firestore commit은 막는다');
 
 // 편집 범위
 node('run.mjs', 'begin', P, 'P3');

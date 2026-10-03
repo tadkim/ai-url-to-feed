@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// edits.json대로 게시할 파일을 만든다 (구간 → 속도 → 배치 → 테두리·모서리). 오케스트레이터와 검토용 서버가 실행한다.
+// edits.json대로 게시할 파일을 만든다 (구간 → 속도 → 배치 → 테두리·모서리). 오케스트레이터와 편집 화면 서버가 실행한다.
 // 사용: node scripts/export.mjs <project>
 // 출력: export/<nn>.mp4 | <nn>.png, export/manifest.json
 //   - 항상 녹화본(raw/)에서 다시 만든다. 편집값이 같은 에셋은 export/.cache/에서 가져온다 (순서만 바꾸면 다시 인코딩하지 않는다).
