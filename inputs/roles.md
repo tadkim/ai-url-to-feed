@@ -18,8 +18,8 @@
 | explore.mjs | planner가 실행한다. record.mjs와 같은 viewport·언어·쓰기 차단으로 사이트를 열어 스크린샷·누를 수 있는 요소·선택자·애니메이션 주기를 돌려준다. `.cache/`에만 쓴다 (git·편집 범위 검사 제외) |
 | try.mjs | planner가 실행한다. 시나리오 하나를 실제 녹화 엔진으로 끝까지 돌려 보고(배율 1) 길이·컨택트 시트·오류를 돌려준다. `.cache/`에만 쓴다 (git·편집 범위 검사 제외) |
 | frames.mjs | editor가 실행한다. 녹화본에서 정한 시점·구간의 프레임을 한 장으로 이어 붙여 준다. `.cache/`에만 쓴다 (git·편집 범위 검사 제외) |
-| record.mjs | plan/의 시나리오를 walkthrough-recorder로 녹화 (viewport x scale). 녹화본마다 컨택트 시트와 장면 전환 시점을 만든다 |
-| export.mjs | edits.json대로 구간 → 속도 → 배치 → 테두리·모서리를 합성해 export/에 영상·이미지를 만든다 |
+| record.mjs | plan/의 시나리오를 walkthrough-recorder로 녹화 (viewport x scale). 녹화본마다 컨택트 시트와 장면 전환 시점을 만든다. 도는 동안 `runs/.harness/busy/<p>.json`을 남긴다 (시작 화면의 "만드는 중") |
+| export.mjs | edits.json대로 구간 → 속도 → 배치 → 테두리·모서리를 합성해 export/에 영상·이미지를 만든다. 도는 동안 `runs/.harness/busy/<p>.json`을 남긴다 |
 | judge.mjs | Phase별 게이트 판정. gate/checks.json, gate/p4-gate.json을 쓴다 |
 | app.mjs (`npm start`) | 시작 화면 서버 (127.0.0.1). URL로 projects.yaml에 등록, 7단계 진행 표시(lib.mjs `progress`), 녹화 확인·완성본 확인 화면(이전 결과와 비교), 편집 화면(`/p/<p>/edit/`). 승인·거절 버튼은 사람이 누를 때만 run.mjs approve·reject를 실행한다 |
 | review.mjs | 편집 화면만 여는 서버. 사람이 고친 값을 edits.json에 저장하고, "내보내기"로 export.mjs → judge.mjs를 실행한다 (app.mjs와 server.mjs를 같이 쓴다) |

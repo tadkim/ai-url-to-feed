@@ -35,6 +35,10 @@
   .step.stopped { border-color: var(--bad); }
   .step.stopped .ic { background: var(--bad); color: #2a0806; }
   .step.optional .ic { border: 1px dashed var(--dim); background: none; }
+  .step.working { border-color: var(--ai); }
+  .step.working .ic { background: var(--ai); color: #1a0b2e; }
+  .step.working .w { color: var(--ai); }
+  .spin { animation: spin 1.2s linear infinite; }
   .step.view { outline: 2px solid var(--line); outline-offset: 2px; }
   .detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 14px; }
   @media (max-width: 900px) { .detail { grid-template-columns: 1fr; } }
@@ -46,7 +50,7 @@
   .nowcard { display: flex; flex-direction: column; gap: 12px; }
   .nowcard .who { font-size: 12px; font-weight: 700; }
   .nowcard .who.me { color: var(--accent); } .nowcard .who.ai { color: var(--ai); } .nowcard .who.done { color: var(--ok); }
-  .nowcard .big { font-size: 17px; font-weight: 600; }
+  .nowcard .big { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .nowcard .reason { background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad); border-radius: 8px; padding: 8px 12px; font-size: 13px; overflow-wrap: anywhere; }
   .nowcard .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .nowcard .actions a.btn { display: inline-flex; align-items: center; gap: 4px; padding: 9px 16px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 700; text-decoration: none; }
@@ -74,6 +78,7 @@ const WHO_IC = { me: 'user', ai: 'bot', computer: 'monitor', done: 'circle-check
 const WHO_TX = { me: '내 차례', ai: 'AI 차례', computer: '컴퓨터', done: '완료' };
 const who = (w, size = 13) => [icon(WHO_IC[w], size), ' ', WHO_TX[w] ?? ''];
 const STATE_IC = { done: 'check', now: 'circle-dot', stopped: 'triangle-alert' };
+const spinIcon = (size) => { const el = icon('loader-circle', size); el?.classList.add('spin'); return el; };
 
 function urlForm(big) {
   const input = h('input', { type: 'url', placeholder: 'https://내사이트.com', 'aria-label': '녹화할 웹사이트 주소', required: true });
@@ -112,7 +117,7 @@ function render() {
         h('div', { class: 'row' }, h('b', {}, x.project), h('span', { class: 'grow' }), h('span', { class: 'hint' }, `${x.done}/${x.total}`)),
         h('span', { class: 'u' }, x.url.replace(/^https?:\/\//, '')),
         h('div', { class: 'bar' }, h('i', { style: `width:${(x.done / x.total) * 100}%` })),
-        h('span', { class: `pill ${x.next === 'STOP' ? 'bad' : x.todo.who === 'me' ? 'warn' : x.todo.who === 'done' ? 'ok' : 'ai'}`, style: 'align-self:flex-start' }, x.next === 'STOP' ? '멈춤' : x.todo.who === 'me' ? '내 차례' : x.todo.who === 'done' ? '완성' : 'AI 차례'))),
+        h('span', { class: `pill ${x.next === 'STOP' ? 'bad' : x.todo.who === 'me' ? 'warn' : x.todo.who === 'done' ? 'ok' : 'ai'}`, style: 'align-self:flex-start' }, x.next === 'STOP' ? '멈춤' : x.todo.who === 'me' ? '내 차례' : x.todo.who === 'done' ? '완성' : x.todo.since ? 'AI가 만드는 중' : 'AI 차례'))),
       h('details', { class: 'card', style: 'padding:12px 14px' }, h('summary', { style: 'cursor:pointer' }, icon('plus', 14), ' 새 사이트'), h('div', { style: 'margin-top:10px' }, urlForm(false)))),
     projectView(p)));
 }
@@ -125,6 +130,7 @@ function envNotice() {
 
 function projectView(p) {
   const shown = p.stages.find((s) => s.id === (viewStage ?? p.current));
+  const working = p.todo.who === 'ai' && p.todo.since;   // AI가 녹화하거나 파일을 만드는 중
   return h('section', { class: 'main' },
     h('div', { class: 'head' },
       h('h2', {}, p.project),
@@ -133,10 +139,10 @@ function projectView(p) {
       h('span', { class: 'hint' }, `${p.done}/${p.total} 단계`),
       h('div', { class: 'bar', style: 'width:180px' }, h('i', { style: `width:${(p.done / p.total) * 100}%` }))),
     h('div', { class: 'steps', role: 'list' }, p.stages.map((s) => h('button', {
-      class: `step ${s.state}${viewStage === s.id ? ' view' : ''}`, role: 'listitem', 'aria-current': s.id === p.current ? 'step' : null,
+      class: `step ${s.state}${working && s.state === 'now' ? ' working' : ''}${viewStage === s.id ? ' view' : ''}`, role: 'listitem', 'aria-current': s.id === p.current ? 'step' : null,
       onclick: () => { viewStage = viewStage === s.id || s.id === p.current ? null : s.id; render(); },
-    }, h('span', { class: 'ic' }, STATE_IC[s.state] ? icon(STATE_IC[s.state], 15) : s.id), h('span', { class: 't' }, `${s.id}. ${s.title}`),
-      h('span', { class: 'w' }, s.state === 'now' ? [icon('arrow-left', 12), ' 지금 여기'] : s.state === 'stopped' ? '멈춤' : s.optional ? '선택' : who(s.who, 12))))),
+    }, h('span', { class: 'ic' }, working && s.state === 'now' ? spinIcon(15) : STATE_IC[s.state] ? icon(STATE_IC[s.state], 15) : s.id), h('span', { class: 't' }, `${s.id}. ${s.title}`),
+      h('span', { class: 'w' }, working && s.state === 'now' ? 'AI가 만드는 중' : s.state === 'now' ? [icon('arrow-left', 12), ' 지금 여기'] : s.state === 'stopped' ? '멈춤' : s.optional ? '선택' : who(s.who, 12))))),
     h('div', { class: 'detail' },
       h('div', { class: 'card' }, h('h2', {}, `${shown.id}. ${shown.title}`, ' ', h('span', { class: 'hint' }, shown.id === p.current ? '— 지금 단계' : '')),
         h('ul', { class: 'checks' }, shown.checks.map((c) => h('li', {}, h('span', { class: `m${c.done ? ' y' : ''}` }, c.done ? icon('check', 12) : ''), h('span', {}, c.label), c.detail && h('span', { class: 'd' }, c.detail))))),
@@ -148,7 +154,7 @@ function todoCard(p) {
   const elapsed = t.since ? Math.max(1, Math.round((Date.now() - Date.parse(t.since)) / 60000)) : null;
   return h('div', { class: 'card nowcard' },
     h('span', { class: `who ${t.who}` }, '지금 할 일 · ', who(t.who, 13)),
-    h('div', { class: 'big' }, t.who === 'ai' && t.since ? [h('span', { class: 'spinner' }), ' '] : null, t.text, elapsed ? h('span', { class: 'hint' }, ` (${elapsed}분째)`) : null),
+    h('div', { class: 'big' }, t.who === 'ai' && t.since ? [spinIcon(18), ' '] : null, t.text, elapsed ? h('span', { class: 'hint' }, ` (${elapsed}분째)`) : null),
     p.next === 'STOP' && t.detail ? h('div', { class: 'reason' }, t.detail) : t.detail && h('div', { class: 'hint', style: 'overflow-wrap:anywhere' }, t.detail),
     t.say && [sayBox(t.say), h('div', { class: 'tip' }, '이 폴더에서 연 Claude Code 창에 붙여 넣어요. (터미널에서 ', h('code', {}, 'claude'), ' 실행)')],
     (t.page || t.edit || t.who === 'done' || t.link) && h('div', { class: 'actions' },

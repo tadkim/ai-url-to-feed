@@ -12,7 +12,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import {
   loadRules, assertProject, loadContext, editsErrors, layoutOf, parseHex, assetHash, assetFile, videoSeconds, derivedPath, runPath,
-  writeJson, exists, now, ff, appendLog, nn,
+  writeJson, exists, now, ff, appendLog, nn, markBusy,
 } from './lib.mjs';
 
 // RGBA 버퍼 → PNG
@@ -136,6 +136,7 @@ if (process.argv[1]?.endsWith('export.mjs')) {
     const project = process.argv[2];
     const rules = loadRules();
     assertProject(rules, project);
+    markBusy(project, 'export');
     const r = exportProject(rules, project);
     console.log(JSON.stringify({ project, ...r }, null, 2));
     process.exit(r.ok ? 0 : 1);

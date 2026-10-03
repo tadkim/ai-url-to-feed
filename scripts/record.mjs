@@ -17,7 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { record } from 'walkthrough-recorder';
 import {
   loadRules, assertProject, projectConf, loadContext, planErrors, scenarioErrors, planDir, recordHash, derivedPath, runPath,
-  readIf, readText, writeJson, exists, sha, fileSha, now, probe, appendLog, inspectVideo, engineSettings,
+  readIf, readText, writeJson, exists, sha, fileSha, now, probe, appendLog, inspectVideo, engineSettings, markBusy,
 } from './lib.mjs';
 import { assertTarget, applyContext } from './browser.mjs';
 
@@ -33,6 +33,7 @@ async function main() {
   const bad = [...planErrors(ctx), ...scenarioErrors(ctx)];
   if (bad.length) throw new Error(`계획이 규칙에 맞지 않아 녹화하지 않는다:\n- ${bad.join('\n- ')}`);
   await assertTarget(conf);
+  markBusy(project, 'record');
 
   const rec = rules.record;
   const rawDir = runPath(project, 'raw');

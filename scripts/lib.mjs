@@ -590,6 +590,22 @@ export function runningAgent(project) {
   return s ? { agent: s.agent, phase: s.phase, started_at: s.started_at } : null;
 }
 
+// 녹화·내보내기처럼 오래 걸리는 스크립트가 도는 동안 남기는 표시. 시작 화면이 "만드는 중"을 보여 준다
+// 프로세스가 끝나면 지운다. Ctrl+C 등으로 지우지 못하고 꺼졌으면 pid가 살아 있는지로 거른다
+const busyFile = (project) => path.join(RUNS, '.harness', 'busy', `${project}.json`);
+export function markBusy(project, task) {
+  const f = busyFile(project);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify({ task, pid: process.pid, started_at: now() }));
+  process.on('exit', () => { try { if (JSON.parse(fs.readFileSync(f, 'utf8')).pid === process.pid) fs.rmSync(f); } catch { /* 이미 없다 */ } });
+}
+export function runningTask(project) {
+  const s = readIf(busyFile(project), true);
+  if (!s) return null;
+  try { process.kill(s.pid, 0); } catch { return null; }
+  return s;
+}
+
 // status(run.mjs)의 결과와 파일 상태로 단계·체크 항목·지금 할 일을 만든다
 export function progress(rules, project, st, next, env = {}) {
   const ctx = loadContext(rules, project);
@@ -642,11 +658,13 @@ export function progress(rules, project, st, next, env = {}) {
   for (const s of stages) s.state = next.next === 'DONE' || s.id < current || (s.optional && current === 7 && s.done) ? 'done' : s.id === current ? (next.next === 'STOP' ? 'stopped' : 'now') : 'todo';
   if (current === 7 && next.next === 'APPROVAL_FINAL') stages[5].state = stages[5].done ? 'done' : 'optional';
   const agent = runningAgent(project);
-  const started = !!(ctx.plan || st.done.P1 || agent);
+  const task = agent ? null : runningTask(project);
+  const started = !!(ctx.plan || st.done.P1 || agent || task);
   let todo;
   if (current === 1) todo = { who: 'me', text: '실행 환경을 준비해요', detail: tools.join(' / ') || 'npx playwright install chromium', link: 'docs/troubleshooting.md' };
   else if (next.next === 'STOP') todo = { who: 'me', text: '멈췄어요 — 이유를 확인하고 고친 뒤 이어서 진행해요', detail: next.reason, say: `${project} 계속 진행해`, link: 'docs/troubleshooting.md' };
   else if (agent) todo = { who: 'ai', text: `AI가 작업 중이에요 (${agent.agent === 'planner' ? '장면 계획·녹화 준비' : '구간·속도 정하기'})`, since: agent.started_at, detail: '끝나면 이 화면에 다음 할 일이 나와요. 그동안 Claude Code 창을 닫지 않아요.' };
+  else if (task) todo = { who: 'ai', text: task.task === 'record' ? '녹화하는 중이에요' : '영상·이미지 파일을 만드는 중이에요', since: task.started_at, detail: task.task === 'record' ? '녹화본마다 1분 안팎 걸려요. 끝나면 이 화면에 다음 할 일이 나와요.' : '1080×1440으로 합성하고 자동 검사를 해요. 끝나면 이 화면에 다음 할 일이 나와요.' };
   else if (next.next === 'APPROVAL_PLAN') todo = { who: 'me', text: '녹화본을 보고 승인하거나 고칠 점을 적어요', page: 'approve/plan' };
   else if (next.next === 'APPROVAL_FINAL') todo = { who: 'me', text: '완성본을 보고 승인하거나 고칠 점을 적어요. 직접 다듬어도 돼요', page: 'approve/final', edit: true };
   else if (next.next === 'DONE') todo = { who: 'done', text: '완성됐어요', detail: `runs/${project}/export/` };
