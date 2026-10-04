@@ -2,13 +2,17 @@
 
 **URL만 넣으면, 인스타그램에 바로 올릴 수 있는 3:4 영상·이미지가 나와요.**
 
-| 지원 OS | 요구 사항 |
-|---|---|
-| macOS (확인됨) · Windows·Linux (미확인) | Node.js 22.2+ · ffmpeg · [Claude Code](https://claude.com/claude-code) |
+[![test](https://github.com/tadkim/ai-url-to-feed/actions/workflows/test.yml/badge.svg)](https://github.com/tadkim/ai-url-to-feed/actions/workflows/test.yml)
+
+| 지원 OS | 확인 범위 | 요구 사항 |
+|---|---|---|
+| macOS | 실제 사이트로 처음부터 끝까지 실행 + 자동 테스트 | Node.js 22.2+ · ffmpeg · [Claude Code](https://claude.com/claude-code) |
+| Linux (Ubuntu) | 자동 테스트 (푸시마다 GitHub Actions) · 실제 사이트 녹화는 미확인 | 위와 같음 · 한글 글꼴 (`fonts-noto-cjk`) |
+| Windows | 미확인 | |
 
 ![터미널: 설치 두 줄 → npx ai-url-to-feed stuckyi.studio → AI가 장면을 정하고 녹화 → 파일 만들기 → 승인 없이 완성, 게시물 파일 목록](docs/assets/cli.gif)
 
-<sub>빈 폴더에서 위 명령 그대로 [stuckyi.studio](https://stuckyi.studio)를 처음부터 만든 실제 터미널 출력을 재생했어요 (실제 17분 23초, 게시물 7개). 위쪽 자막만 덧붙였고 기다리는 시간은 줄였어요 · 선명한 버전 [cli.mp4](docs/assets/cli.mp4)</sub>
+<sub>빈 폴더에서 위 명령 그대로 [stuckyi.studio](https://stuckyi.studio)를 처음부터 만든 실제 터미널 출력을 재생했어요 (실제 12분 7초, 게시물 6개, Claude Code 사용량 $2.63). 위쪽 자막만 덧붙였고 기다리는 시간은 줄였어요 · 선명한 버전 [cli.mp4](docs/assets/cli.mp4)</sub>
 
 ## 하네스가 하는 일
 

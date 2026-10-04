@@ -2,33 +2,39 @@
 $ git clone https://github.com/tadkim/ai-url-to-feed.git && cd ai-url-to-feed
 Cloning into 'ai-url-to-feed'...
 $ npm install
-added 25 packages, and audited 26 packages in 3s
+added 25 packages, and audited 26 packages in 2s
 found 0 vulnerabilities
 #! ② 주소와 배경색을 넣고 실행해요
 $ npx ai-url-to-feed stuckyi.studio --bg=#B987FF
 환경 확인      Node 22.23.1 · ffmpeg · chromium 완료
 사이트 등록    https://stuckyi.studio → stuckyi (새로 등록)  배경 #B987FF · 게시물 5~10개
-#! ③ AI가 장면을 정하고 녹화해요 — Claude Code를 대신 띄워요
-@{"t":35,"i":0,"label":"장면 계획","text":"Claude Code가 다음 할 일을 정하는 중","next":"P1"}
-@{"t":10088,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비)","next":"P1"}
-@{"t":660442,"i":1,"label":"녹화","text":"Claude Code가 다음 할 일을 정하는 중","next":"P2"}
-@{"t":668447,"i":1,"label":"녹화","text":"녹화하는 중이에요","next":"P2"}
+#! ③ AI가 사이트를 둘러보고 장면을 정해 녹화해요
+@{"t":45,"i":0,"label":"장면 계획","text":"Claude Code가 다음 할 일을 정하는 중","next":"P1"}
+@{"t":8108,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비)","next":"P1"}
+@{"t":22123,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비) · 화면 4개 둘러봄","next":"P1"}
+@{"t":54152,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비) · 화면 8개 둘러봄","next":"P1"}
+@{"t":130206,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비) · 화면 11개 둘러봄","next":"P1"}
+@{"t":158252,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비) · 화면 14개 둘러봄","next":"P1"}
+@{"t":192262,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비) · 화면 19개 둘러봄","next":"P1"}
+@{"t":318388,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비) · 화면 19개 둘러봄 · 시나리오 3번 돌려 봄","next":"P1"}
+@{"t":420491,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비) · 화면 19개 둘러봄 · 시나리오 5번 돌려 봄","next":"P1"}
+@{"t":510577,"i":1,"label":"녹화","text":"Claude Code가 다음 할 일을 정하는 중","next":"P2"}
+@{"t":514566,"i":1,"label":"녹화","text":"녹화하는 중이에요","next":"P2"}
 #! ④ 구간·속도를 정하고 1080×1440 파일을 만들어요
-@{"t":744476,"i":2,"label":"구간·속도 정하기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P3"}
-@{"t":752496,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기)","next":"P3"}
-@{"t":940578,"i":3,"label":"파일 만들기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
-@{"t":946584,"i":3,"label":"파일 만들기","text":"영상·이미지 파일을 만드는 중이에요","next":"P4"}
-@{"t":950592,"i":4,"label":"자동 검사","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
-#! 자동 검사에서 걸리면 AI가 다시 고쳐요
-@{"t":952599,"i":2,"label":"구간·속도 정하기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P3"}
-@{"t":958599,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기)","next":"P3"}
-@{"t":1018619,"i":3,"label":"파일 만들기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
-@{"t":1024627,"i":3,"label":"파일 만들기","text":"영상·이미지 파일을 만드는 중이에요","next":"P4"}
-@{"t":1026633,"i":4,"label":"자동 검사","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
-#! ⑤ 승인 없이 완성 — 실제 17분 23초
-@{"t":1028640,"i":5,"label":"완성","text":"","next":"DONE"}
+@{"t":582642,"i":2,"label":"구간·속도 정하기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P3"}
+@{"t":588643,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기)","next":"P3"}
+@{"t":626681,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기) · 프레임 1번 확인","next":"P3"}
+@{"t":638702,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기) · 프레임 2번 확인","next":"P3"}
+@{"t":660703,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기) · 프레임 3번 확인","next":"P3"}
+@{"t":662709,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기) · 프레임 4번 확인","next":"P3"}
+@{"t":700757,"i":3,"label":"파일 만들기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
+@{"t":706749,"i":3,"label":"파일 만들기","text":"영상·이미지 파일을 만드는 중이에요","next":"P4"}
+@{"t":708757,"i":4,"label":"자동 검사","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
+#! ⑤ 승인 없이 완성 — 실제 12분 7초
+@{"t":712771,"i":5,"label":"완성","text":"","next":"DONE"}
+@{"t":726742,"i":5,"label":"완성","text":"","next":"DONE","end":true,"cost_usd":2.63,"turns":21}
 
-완성  runs/stuckyi/export/  01.mp4 02.png 03.mp4 04.png 05.mp4 06.png 07.png
-  자동 모드 — 모든 자동 검사 PASS (사람 승인 없이 완성) · 17분 23초
+완성  runs/stuckyi/export/  01.mp4 02.png 03.mp4 04.png 05.mp4 06.png
+  자동 모드 — 모든 자동 검사 PASS (사람 승인 없이 완성) · 12분 7초 · Claude Code 사용량 $2.63 (API 요금 기준, 21턴)
   결과 폴더 열기: npx ai-url-to-feed open stuckyi · 게시물처럼 넘겨 보기: npx ai-url-to-feed ui
 #! results
