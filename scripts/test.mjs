@@ -366,11 +366,11 @@ eq(node('run.mjs', 'end', P, 'P3').code, 1, 'editor가 plan/을 고치면 FAIL')
   if (group) eq(alive(claude.pid), false, '삭제: 명령줄이 띄운 Claude Code 묶음까지 멈춘다'); else claude.kill();
   eq(r.stopped, ['명령줄', '녹화'], '삭제: 멈춘 것을 알려 준다');
   ok(!fs.existsSync(L.runPath(D, '')) && !fs.existsSync(path.join(sd, 'state', `${D}.json`)) && !fs.existsSync(path.join(L.RUNS, '.harness', 'scope', `${D}-P1.json`)) && !fs.existsSync(L.activityFile(D)) && !fs.existsSync(path.join(L.ROOT, '.cache', 'explore', D)), '삭제: 기록·상태·작업 표시·캐시를 지운다');
-  ok(r.kept && fs.existsSync(path.join(L.ROOT, r.kept, '01.mp4')), '삭제: 게시물 파일은 남겨 둘 수 있다', r.kept);
+  ok(r.kept && fs.existsSync(path.join(path.resolve(L.ROOT, r.kept), '01.mp4')), '삭제: 게시물 파일은 남겨 둘 수 있다', r.kept);   // 드라이브가 다르면(Windows) r.kept는 절대 경로다
   eq(L.loadRules().projects[D], undefined, '삭제: projects.yaml에서 뺀다');
   let threw = false; try { await Pj.deleteProject('../x'); } catch { threw = true; }
   ok(threw, '삭제: 등록되지 않은 이름·경로는 거부한다');
-  fs.rmSync(path.join(L.ROOT, r.kept), { recursive: true, force: true });
+  fs.rmSync(path.resolve(L.ROOT, r.kept), { recursive: true, force: true });
   fs.writeFileSync(process.env.HARNESS_PROJECTS, before);
 }
 
