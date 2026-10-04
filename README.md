@@ -8,7 +8,7 @@
 |---|---|---|
 | macOS | 실제 사이트로 처음부터 끝까지 실행 + 자동 테스트 | Node.js 22.2+ · ffmpeg · [Claude Code](https://claude.com/claude-code) |
 | Linux (Ubuntu) | 자동 테스트 (푸시마다 GitHub Actions) · 실제 사이트 녹화는 미확인 | 위와 같음 · 한글 글꼴 (`fonts-noto-cjk`) |
-| Windows | 미확인 | |
+| Windows | 자동 테스트 (푸시마다 GitHub Actions) · 명령줄로 Claude Code 실행·실제 사이트 녹화는 미확인 | 위와 같음 · ffmpeg는 `choco install ffmpeg` 등 |
 
 ![터미널: 설치 두 줄 → npx ai-url-to-feed stuckyi.studio → AI가 장면을 정하고 녹화 → 파일 만들기 → 승인 없이 완성, 게시물 파일 목록](docs/assets/cli.gif)
 

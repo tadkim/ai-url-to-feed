@@ -45,4 +45,4 @@ Claude Code 사용량이 들어요. 실제로 돌려 확인한 값이에요 (사
 |---|---|
 | macOS | 실제 사이트로 처음부터 끝까지 실행했어요 |
 | Linux (Ubuntu) | 푸시마다 GitHub Actions에서 자동 테스트(144개)가 통과해요. 실제 사이트 녹화는 아직 확인하지 않았어요. `npx playwright install --with-deps chromium`과 한글 글꼴(`fonts-noto-cjk`)이 필요해요 |
-| Windows | 아직 확인하지 않았어요 |
+| Windows | 푸시마다 자동 테스트(144개)가 통과해요. 명령줄이 Claude Code를 띄우는 부분과 실제 사이트 녹화는 아직 확인하지 않았어요 |

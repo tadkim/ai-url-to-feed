@@ -167,7 +167,7 @@ AI가 일하는 동안 그 단계가 **AI가 만드는 중**으로 바뀌고, �
 | Claude Code를 직접 열 때 | 폴더를 신뢰하지 않으면 하네스 명령마다 실행 허락을 물어요. 신뢰(Yes)를 골라요 |
 | 승인·거절 (편집·꼼꼼 모드, 말로 할 때) | 승인·거절을 기록하는 명령은 **일부러** 매번 실행 허락을 물어요. 허용을 누르면 돼요. 화면 버튼으로 하면 묻지 않아요 |
 | 화면에서 승인·다시 찍기를 누른 뒤 | AI는 화면 버튼을 기다리지 않아요. 같은 명령(`npx ai-url-to-feed stuckyi.studio`)을 다시 실행하거나 Claude Code에 `이어서 해줘`라고 말해야 다음 단계를 시작해요 |
-| 설치 | Linux(Ubuntu)는 자동 테스트만 확인했고 `npx playwright install --with-deps chromium`과 한글 글꼴(`fonts-noto-cjk`)이 필요해요. Windows는 아직 확인 전이에요 |
+| 설치 | Linux(Ubuntu)는 자동 테스트만 확인했고 `npx playwright install --with-deps chromium`과 한글 글꼴(`fonts-noto-cjk`)이 필요해요. Windows도 자동 테스트까지만 확인했어요 |
 | 녹화 | 로그인이 필요한 사이트는 아직 찍을 수 없어요 |
 
 ## Claude Code에 하는 말 (대화로 진행할 때)
