@@ -2,6 +2,10 @@
 
 **URL만 넣으면, 인스타그램에 바로 올릴 수 있는 3:4 영상·이미지가 나와요.**
 
+| 지원 OS | 요구 사항 |
+|---|---|
+| macOS (확인됨) · Windows·Linux (미확인) | Node.js 22.2+ · ffmpeg · [Claude Code](https://claude.com/claude-code) |
+
 ![터미널: 설치 두 줄 → npx ai-url-to-feed stuckyi.studio → AI가 장면을 정하고 녹화 → 파일 만들기 → 승인 없이 완성, 게시물 파일 목록](docs/assets/cli.gif)
 
 <sub>빈 폴더에서 위 명령 그대로 [stuckyi.studio](https://stuckyi.studio)를 처음부터 만든 실제 터미널 출력을 재생했어요 (실제 17분 23초, 게시물 7개). 위쪽 자막만 덧붙였고 기다리는 시간은 줄였어요 · 선명한 버전 [cli.mp4](docs/assets/cli.mp4)</sub>
@@ -72,8 +76,6 @@ npx ai-url-to-feed stuckyi.studio --bg=#B987FF   # 주소와 배경색. https://
 | 원할 때만: 구간·재생 속도·배경색·테두리 편집, 다시 찍기 요청 | |
 | 사이트에 데이터를 남기지 않고 녹화 | |
 
-macOS에서 확인했어요. Windows·Linux는 아직 돌려 보지 않았어요.
-
 ## 문서
 
 | 문서 | 내용 |
@@ -87,4 +89,12 @@ macOS에서 확인했어요. Windows·Linux는 아직 돌려 보지 않았어요
 
 ## 라이선스
 
-MIT · 녹화 엔진 [walkthrough-recorder](https://github.com/tadkim/walkthrough-recorder)도 MIT
+| 구성 요소 | 라이선스 | 비고 |
+|---|---|---|
+| ai-url-to-feed (이 저장소) | MIT | [LICENSE](LICENSE) · Copyright (c) 2026 tadkim |
+| [walkthrough-recorder](https://github.com/tadkim/walkthrough-recorder) | MIT | 녹화 엔진 · Copyright (c) 2026 tadkim |
+| [Playwright](https://github.com/microsoft/playwright) | Apache-2.0 | 브라우저 제어·녹화 |
+| [Lucide](https://lucide.dev) | ISC | 화면 아이콘 |
+| [yaml](https://github.com/eemeli/yaml) | ISC | 설정 파일 읽기·쓰기 |
+| [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) | GPL-3.0-or-later | walkthrough-recorder가 설치하는 ffmpeg 실행 파일 |
+| [FFmpeg](https://ffmpeg.org) | LGPL-2.1+ / GPL-2.0+ (빌드 설정에 따라) | 별도 설치 (`brew install ffmpeg`) · 영상 합성·검사 |
