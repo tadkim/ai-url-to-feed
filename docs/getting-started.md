@@ -30,7 +30,7 @@ npm install          # 녹화 엔진, 녹화용 브라우저(chromium) 설치와
 npx ai-url-to-feed stuckyi.studio --bg=#B987FF
 ```
 
-진행 중에는 맨 아래 진행 막대가 계속 바뀌고, 끝난 단계는 그 위에 한 줄씩 남아요.
+진행 중에는 맨 아래 진행 막대가 계속 바뀌고, 끝난 단계는 그 위에 한 줄씩 남아요. AI가 일하는 동안에는 둘러본 화면 수, 미리 돌려 본 시나리오 수가 함께 늘어나서 멈춘 게 아닌 걸 알 수 있어요. 다 끝나면 걸린 시간과 Claude Code 사용량(API 요금 기준 금액)도 나와요.
 
 ```text
 ⠦ ████████░░░░░░░░░░░░  40% | 3/5 구간·속도 정하기 | AI가 작업 중이에요 (구간·속도 정하기) | 00:08
@@ -84,6 +84,7 @@ Claude Code가 한 일은 `runs/.harness/log/stuckyi-claude.log`에 남아요. �
 | 결과 폴더 열기 | `npx ai-url-to-feed open stuckyi` |
 | 배경색만 바꿔 다시 만들기 | `npx ai-url-to-feed stuckyi.studio --bg=#FDE68A` |
 | 장면 자체를 다시 찍기 | `npx ai-url-to-feed retake stuckyi "02는 지도 화면을 더 오래 보여 줘"` |
+| 멈췄을 때 이어서 하기 | `npx ai-url-to-feed continue stuckyi` (멈춤(STOP)도 풀어요) |
 | 게시물처럼 넘겨 보기 | `npx ai-url-to-feed ui` → **결과 보기** |
 
 ## 진행 방식

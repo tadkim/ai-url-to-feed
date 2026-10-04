@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
-import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, stateDir } from './lib.mjs';
+import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, stateDir, activitySince } from './lib.mjs';
 import { addProject } from './projects.mjs';
 import { status } from './run.mjs';
 
@@ -25,12 +25,13 @@ const HELP = `ai-url-to-feed — URL 하나로 인스타그램 3:4(1080×1440) �
   npx ai-url-to-feed status <프로젝트>   진행 상황
   npx ai-url-to-feed open <프로젝트>     결과 폴더 열기
   npx ai-url-to-feed retake <프로젝트> "<요청>"   요청대로 장면을 다시 찍고 다시 만들어요
+  npx ai-url-to-feed continue <프로젝트> 멈춘 곳부터 다시 진행해요 (멈춤(STOP)도 풀어요)
   npx ai-url-to-feed ui [--port 4455]    시작 화면(HTML)을 열어요
 
 같은 주소로 다시 실행하면 이어서 진행해요. 옵션을 바꿔 다시 실행하면 그 설정으로 다시 만들어요.`;
 
 const VALUE_FLAGS = ['bg', 'count', 'title', 'port'];
-const COMMANDS = ['status', 'open', 'retake', 'ui', 'help'];
+const COMMANDS = ['status', 'open', 'retake', 'continue', 'ui', 'help'];
 
 // --bg=#fff, --bg #fff 둘 다 받는다
 export function parseArgs(argv) {
@@ -81,14 +82,16 @@ const hasClaude = () => !spawnSync('claude', ['--version'], { encoding: 'utf8' }
 const allowed = () => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, '.claude', 'settings.json'), 'utf8')).permissions?.allow ?? []; } catch { return []; } };
 const opener = { darwin: 'open', win32: 'explorer', linux: 'xdg-open' }[process.platform];
 
-function printDone(project, s, ms) {
+const usageText = (u) => (u?.runs ? ` · Claude Code 사용량 $${u.cost.toFixed(2)} (API 요금 기준, ${u.turns}턴)` : '');
+function printDone(project, s, ms, usage) {
   const files = exportFiles(project);
   say(`\n${green(bold('완성'))}  ${exportDir(project)}/  ${files.join(' ')}`);
-  say(dim(`  ${s.reason}${ms ? ` · ${Math.floor(ms / 60000)}분 ${Math.round((ms % 60000) / 1000)}초` : ''}`));
+  say(dim(`  ${s.reason}${ms ? ` · ${Math.floor(ms / 60000)}분 ${Math.round((ms % 60000) / 1000)}초` : ''}${usageText(usage)}`));
   say(dim(`  결과 폴더 열기: npx ai-url-to-feed open ${project} · 게시물처럼 넘겨 보기: npx ai-url-to-feed ui`));
 }
-function printStop(s) {
+function printStop(s, project) {
   say(`\n${red(bold('멈췄어요'))}  ${s.reason}`);
+  if (project) say(dim(`  원인을 고친 뒤 이어서 하려면: npx ai-url-to-feed continue ${project}`));
   for (const f of s.failing ?? []) say(red(`  - ${f.gate}: ${[].concat(f.detail ?? []).join(' / ')}`));
   if (s.notes?.length) say(dim(`  요청: ${s.notes.at(-1).note}`));
 }
@@ -156,6 +159,7 @@ async function drive(project, phrase) {
   fs.mkdirSync(logDir, { recursive: true });
   fs.writeFileSync(eventFile, '');
   const t0 = Date.now();
+  const usage = { runs: 0, cost: 0, turns: 0 };   // Claude Code 사용량 (실행마다 더한다)
   const cur = { i: null, label: STEPS[0], text: '', since: t0 };   // i는 첫 확인 때 정한다 (이어서 할 때 이미 끝난 단계는 다시 찍지 않는다)
   let frame = 0;
   let lastLine = '';
@@ -166,7 +170,11 @@ async function drive(project, phrase) {
     const { i, label } = stepOf(s, cur.i ?? 0, runningAgent(project)?.agent ?? runningTask(project)?.task);
     cur.i ??= i;
     // 단계 사이에 Claude Code가 다음 할 일을 고르는 순간 (화면용 "Claude Code에 말해서 …" 대신)
-    const text = pr.todo.since ? pr.todo.text : s.next === 'DONE' ? '' : 'Claude Code가 다음 할 일을 정하는 중';
+    // 에이전트가 일하는 동안에는 도구 활동(둘러본 화면·돌려 본 시나리오·확인한 프레임 수)을 붙여 멈춘 게 아님을 보여 준다
+    const ag = runningAgent(project);
+    const did = ag ? activitySince(project, ag.started_at) : {};
+    const extra = [did.explore && `화면 ${did.explore}개 둘러봄`, did.try && `시나리오 ${did.try}번 돌려 봄`, did.frames && `프레임 ${did.frames}번 확인`].filter(Boolean).join(' · ');
+    const text = pr.todo.since ? `${pr.todo.text}${extra ? ` · ${extra}` : ''}` : s.next === 'DONE' ? '' : 'Claude Code가 다음 할 일을 정하는 중';
     if (i > cur.i) for (let k = cur.i; k < Math.min(i, STEPS.length); k++) above(green(doneLine(STEPS[k], Date.now() - (k === cur.i ? cur.since : Date.now()))));
     if (i !== cur.i) cur.since = Date.now();
     Object.assign(cur, { i, label, text });
@@ -185,23 +193,31 @@ async function drive(project, phrase) {
       const text = `${project} ${attempt === 1 ? phrase : '이어서 해줘'}`;
       fs.appendFileSync(logFile, `\n===== ${new Date().toISOString()} claude -p "${text}"\n`);
       const fd = fs.openSync(logFile, 'a');
-      const child = spawn('claude', ['-p', text, '--permission-mode', 'acceptEdits', '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', fd, fd] });
+      // 결과는 JSON 한 덩어리(사용량 포함)로 받는다. 보고 글은 기록 파일에 남긴다
+      const child = spawn('claude', ['-p', text, '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', 'pipe', fd] });
+      let stdout = '';
+      child.stdout.on('data', (d) => { stdout += d; });
       const stop = () => { child.kill('SIGTERM'); if (isTTY) process.stdout.write('\n'); say(`\n멈췄어요. 이어서 하려면 같은 명령을 다시 실행해요. 기록: ${path.relative(process.cwd(), logFile)}`); process.exit(130); };
       process.once('SIGINT', stop);
       tick();
       const timer = setInterval(tick, 2000);
-      const code = await new Promise((ok) => child.on('exit', ok));
+      const code = await new Promise((ok) => child.on('close', ok));
+      try {
+        const r = JSON.parse(stdout);
+        Object.assign(usage, { runs: usage.runs + 1, cost: usage.cost + (r.total_cost_usd ?? 0), turns: usage.turns + (r.num_turns ?? 0) });
+        fs.appendFileSync(logFile, `${r.result ?? ''}\n(사용량 $${(r.total_cost_usd ?? 0).toFixed(2)}, ${r.num_turns}턴, ${Math.round((r.duration_ms ?? 0) / 1000)}초)\n`);
+      } catch { fs.appendFileSync(logFile, stdout); }
       clearInterval(timer);
       process.removeListener('SIGINT', stop);
       fs.closeSync(fd);
       const s = tick();
       if (['DONE', 'STOP', 'APPROVAL_FINAL', 'APPROVAL_PLAN'].includes(s.next)) {
         clearInterval(spinner);
-        fs.appendFileSync(eventFile, `${JSON.stringify({ t: Date.now() - t0, i: cur.i, label: cur.label, text: cur.text, next: s.next, end: true })}\n`);
+        fs.appendFileSync(eventFile, `${JSON.stringify({ t: Date.now() - t0, i: cur.i, label: cur.label, text: cur.text, next: s.next, end: true, cost_usd: Math.round(usage.cost * 100) / 100, turns: usage.turns })}\n`);
         render(s.next === 'DONE');
         if (isTTY) process.stdout.write('\n');
-        if (s.next === 'DONE') { printDone(project, s, Date.now() - t0); return 0; }
-        if (s.next === 'STOP') { printStop(s); return 1; }
+        if (s.next === 'DONE') { printDone(project, s, Date.now() - t0, usage); return 0; }
+        if (s.next === 'STOP') { printStop(s, project); say(dim(`  ${usageText(usage).replace(/^ · /, '')}`)); return 1; }
         return 'approval';
       }
       above(dim(`  Claude Code가 끝났지만 아직 ${s.next} 단계예요 (종료 코드 ${code}). 이어서 진행해요 (${attempt}/3)`));
@@ -242,7 +258,7 @@ async function make(target, opts) {
     return 0;
   }
   if (s.next === 'DONE') { printDone(r.name, s); return 0; }
-  if (s.next === 'STOP') { printStop(s); say(dim('  고친 뒤 계속하려면 Claude Code에 "' + r.name + ' 계속 진행해"')); return 1; }
+  if (s.next === 'STOP') { printStop(s, r.name); return 1; }
   const res = ['APPROVAL_FINAL', 'APPROVAL_PLAN'].includes(s.next) ? 'approval' : await drive(r.name, r.existed ? '이어서 해줘' : '하네스 시작해줘');
   return res === 'approval' ? afterApproval(r.name, opts.port) : res;
 }
@@ -288,6 +304,21 @@ async function retake(project, note) {
   return res === 'approval' ? afterApproval(project) : res;
 }
 
+// 멈춘 곳부터 다시: 멈춤(STOP)이면 사람이 이 명령을 친 것을 "계속 진행해"로 기록하고(run.mjs unblock) 이어서 한다
+async function resume(project, port) {
+  const rules = loadRules();
+  assertProject(rules, project);
+  const s = safe(rules, project);
+  if (s.next === 'DONE') { printDone(project, s); return 0; }
+  if (s.next === 'STOP') {
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'run.mjs'), 'unblock', project], { encoding: 'utf8', cwd: ROOT });
+    if (r.status !== 0) { say(red(r.stderr || r.stdout)); return 2; }
+    say(`${bold('멈춤 해제')}  ${dim(s.reason)}`);
+  }
+  const res = ['APPROVAL_FINAL', 'APPROVAL_PLAN'].includes(s.next) ? 'approval' : await drive(project, '이어서 해줘');
+  return res === 'approval' ? afterApproval(project, port) : res;
+}
+
 async function main(argv) {
   const { cmd, args, opts } = parseArgs(argv);
   if (cmd === 'help') { say(HELP); return 0; }
@@ -295,6 +326,7 @@ async function main(argv) {
   if (cmd === 'status') return args[0] ? showStatus(args[0]) : (say(red('프로젝트 이름을 적어요: npx ai-url-to-feed status <프로젝트>')), 1);
   if (cmd === 'open') return args[0] ? openExport(args[0]) : (say(red('프로젝트 이름을 적어요: npx ai-url-to-feed open <프로젝트>')), 1);
   if (cmd === 'retake') return retake(args[0], args.slice(1).join(' '));
+  if (cmd === 'continue') return args[0] ? resume(args[0], opts.port) : (say(red('프로젝트 이름을 적어요: npx ai-url-to-feed continue <프로젝트>')), 1);
   if (args.length > 1) { say(red(`주소는 하나만 넣어요: ${args.join(' ')}`)); return 1; }
   return make(args[0], opts);
 }

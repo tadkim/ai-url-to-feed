@@ -25,6 +25,7 @@
 - 그렇게 불린 세션도 아래 루프를 그대로 따른다. 사람에게 묻지 않는다 (답할 사람이 없다). 승인 단계(APPROVAL_*)나 STOP에 닿으면 보고하고 끝낸다. cli.mjs가 status를 보고 편집 화면을 열거나 사람에게 알린다.
 - 허용 목록(.claude/settings.json)에 없는 명령은 거절된다. 하네스 스크립트와 Read·Write·Edit·에이전트로만 진행한다.
 - `npx ai-url-to-feed retake <p> "<요청>"`은 사람이 친 다시 찍기 요청이다 (cli.mjs가 `run.mjs reject <p> plan --note`로 기록한다).
+- `npx ai-url-to-feed continue <p>`는 사람이 친 "계속 진행해"다 (STOP이면 cli.mjs가 `run.mjs unblock`을 기록하고 이어서 한다).
 
 ### 진행 방식 (projects.yaml `mode`, 기본 auto)
 

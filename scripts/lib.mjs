@@ -495,6 +495,39 @@ function edgeErrors(ctx) {
   return errs;
 }
 
+// 에셋마다 녹화본에서 뽑은 대표 화면 (작게): 영상은 구간을 4등분한 5곳, 이미지는 각 화면
+function repFrames(ctx, a) {
+  ctx.repCache ??= new Map();
+  const key = JSON.stringify([a.type, a.source, a.in, a.out, a.shots]);
+  if (!ctx.repCache.has(key)) {
+    const file = (src) => { const r = ctx.raw?.recordings?.find((x) => x.name === src && !x.error); return r ? ctx.dir(`raw/${r.file}`) : null; };
+    const pts = a.type === 'video' ? [0, 0.25, 0.5, 0.75, 1].map((k) => [a.source, a.in + (a.out - a.in) * k - (k === 1 ? 0.05 : 0)]) : (a.shots ?? []).map((x) => [x.source, x.at]);
+    ctx.repCache.set(key, pts.filter(([src]) => file(src)).map(([src, t]) => ({ src, t: Math.round(t * 10) / 10, buf: frameRgb(file(src), t, { size: ctx.rules.gate.rep_size }) })));
+  }
+  return ctx.repCache.get(key);
+}
+const kindOf = (a, josa = false) => (a.type === 'video' ? `영상${josa ? '과' : ''}` : `이미지${josa ? '와' : ''}`);
+function varietyErrors(ctx) {
+  const { rules, edits } = ctx;
+  const reps = edits.assets.map((a) => ({ a, frames: repFrames(ctx, a) }));
+  const errs = [];
+  for (let i = 0; i < reps.length; i++) for (let j = i + 1; j < reps.length; j++) {
+    let best = null;
+    for (const x of reps[i].frames) for (const y of reps[j].frames) { const p = psnr(x.buf, y.buf); if (!best || p > best.p) best = { p, x, y }; }
+    if (best && best.p >= rules.gate.dup_psnr) errs.push(`${nn(reps[i].a.n)} ${kindOf(reps[i].a, true)} ${nn(reps[j].a.n)} ${kindOf(reps[j].a)}에 같은 화면이 있다 (${best.x.src} ${best.x.t}초 ↔ ${best.y.src} ${best.y.t}초, PSNR ${best.p}) — 한쪽 구간이나 장면을 바꾼다`);
+  }
+  return errs;
+}
+function motionErrors(ctx) {
+  const { rules, edits } = ctx;
+  return edits.assets.filter((a) => a.type === 'video').flatMap((a) => {
+    const f = repFrames(ctx, a);
+    if (f.length < 2) return [];
+    const least = Math.min(...f.slice(1).map((x) => psnr(f[0].buf, x.buf)));
+    return least >= rules.gate.static_psnr ? [`${nn(a.n)} 영상: 구간(${a.in}~${a.out}초) 안에서 화면이 거의 움직이지 않는다 (첫 화면과 PSNR ≥ ${least}) — 움직이는 구간으로 바꾸거나 이미지로 쓴다`] : [];
+  });
+}
+
 function bgErrors(ctx) {
   const { rules, edits } = ctx;
   const { width: W, height: H } = rules.assets.canvas;
@@ -553,6 +586,8 @@ export const CHECKERS = {
   video_length: lengthErrors,
   clip_edges: edgeErrors,
   canvas_bg: bgErrors,
+  asset_variety: varietyErrors,
+  video_motion: motionErrors,
   loop_seam: loopErrors,
   approval_final: (ctx) => approvalOk(ctx, 'approval_final', finalHash(ctx.rules, ctx.project)),
 };
@@ -629,6 +664,21 @@ export function runningAgent(project) {
 // 녹화·내보내기처럼 오래 걸리는 스크립트가 도는 동안 남기는 표시. 시작 화면이 "만드는 중"을 보여 준다
 // 프로세스가 끝나면 지운다. Ctrl+C 등으로 지우지 못하고 꺼졌으면 pid가 살아 있는지로 거른다
 const busyFile = (project) => path.join(RUNS, '.harness', 'busy', `${project}.json`);
+// 에이전트 도구(explore·try·frames)의 활동 기록 — 명령줄 진행 막대에 "화면 12개 둘러봄"처럼 보인다.
+// .cache/는 git·편집 범위 검사에서 빠진다. 기록이 실패해도 도구는 그대로 돈다
+const activityFile = (project) => path.join(ROOT, '.cache', 'activity', `${project}.jsonl`);
+export function activity(project, kind, n = 1) {
+  try { fs.mkdirSync(path.dirname(activityFile(project)), { recursive: true }); fs.appendFileSync(activityFile(project), `${JSON.stringify({ at: now(), kind, n })}\n`); } catch { /* 표시용 */ }
+}
+export function activitySince(project, since) {
+  const sum = {};
+  for (const l of (readIf(activityFile(project)) ?? '').split('\n')) {
+    if (!l) continue;
+    try { const e = JSON.parse(l); if (!since || e.at >= since) sum[e.kind] = (sum[e.kind] ?? 0) + e.n; } catch { /* 깨진 줄 */ }
+  }
+  return sum;
+}
+
 export function markBusy(project, task) {
   const f = busyFile(project);
   fs.mkdirSync(path.dirname(f), { recursive: true });

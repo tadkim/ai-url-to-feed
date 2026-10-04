@@ -114,9 +114,10 @@ eq(node('run.mjs', 'approve', P, 'plan').json?.next, 'P3', '승인 1 → P3');
 const style = { bg: '#B987FF', border: '#444444', bw: 2, radius: 24 };
 const edits = { style, assets: [
   { n: 1, type: 'video', layout: 'single', source: 'r1', in: 1, out: 5, speed: 2, loop: null },
-  { n: 2, type: 'image', layout: 'single', shots: [{ source: 'r1', at: 2 }] },
-  { n: 3, type: 'image', layout: 'double', shots: [{ source: 'r1', at: 3 }, { source: 'r1', at: 6 }] },
-  { n: 4, type: 'image', layout: 'triple', shots: [{ source: 'r1', at: 1 }, { source: 'r1', at: 4 }, { source: 'r1', at: 8 }] },
+  // 이미지 화면은 영상 구간의 대표 지점(4등분)과 겹치지 않는 시각에서 뽑는다 (게이트 asset_variety)
+  { n: 2, type: 'image', layout: 'single', shots: [{ source: 'r1', at: 2.5 }] },
+  { n: 3, type: 'image', layout: 'double', shots: [{ source: 'r1', at: 3.5 }, { source: 'r1', at: 5.5 }] },
+  { n: 4, type: 'image', layout: 'triple', shots: [{ source: 'r1', at: 0.5 }, { source: 'r1', at: 4.5 }, { source: 'r1', at: 9.5 }] },
   { n: 5, type: 'video', layout: 'single', source: 'r1', in: 6, out: 9, speed: 1, loop: null },
 ] };
 const putEdits = (e) => write('edit/edits.json', `${JSON.stringify(e, null, 2)}\n`);
@@ -171,11 +172,21 @@ r = node('judge.mjs', P, '--phase', 'P4');
 eq(r.code, 1, '빈 화면이면 FAIL');
 ok(gate(r.json, 'clip_edges').detail.length === 3, '빈 화면: 영상 첫·마지막 프레임 + 이미지', JSON.stringify(gate(r.json, 'clip_edges').detail));
 ok(gate(r.json, 'canvas_bg').pass, '배경색 통과');
+ok(!gate(r.json, 'video_motion').pass && /05 영상/.test(gate(r.json, 'video_motion').detail[0]), '멈춘 영상(한 가지 색 녹화본)은 video_motion FAIL', JSON.stringify(gate(r.json, 'video_motion').detail));
 const center = (buf) => { const s = L.layoutOf(rules, 'single').slots[0]; const i = ((s.y + s.h / 2) * W + s.x + s.w / 2) * 3; return [buf[i], buf[i + 1], buf[i + 2]]; };
 const dv = L.deltaE(center(L.frameRgb(dir('export/05.mp4'), 0.5, { matrix: 'bt709' })), FLAT);
 const di = L.deltaE(center(L.frameRgb(dir('export/02.png'), null)), FLAT);
 ok(dv <= 3 && di <= 3, '화면 색이 녹화본과 같다', `— 영상 ΔE ${dv}, 이미지 ΔE ${di}`);
 eq(status().next, 'P3', 'P4 FAIL → P3');
+
+// 같은 화면이 두 에셋에: 이미지 화면을 영상 구간의 대표 지점(2초)에서 뽑으면 asset_variety FAIL
+{
+  const dup = structuredClone(edits); dup.assets[1].shots[0].at = 2;
+  const errs = L.CHECKERS.asset_variety({ ...L.loadContext(rules, P), edits: dup });
+  ok(errs.length === 1 && errs[0].startsWith('01 영상과 02 이미지에 같은 화면'), '같은 화면이 두 에셋에 있으면 asset_variety FAIL', JSON.stringify(errs));
+  eq(L.CHECKERS.asset_variety({ ...L.loadContext(rules, P), edits }), [], '다른 화면이면 asset_variety 통과');
+  eq(L.CHECKERS.video_motion({ ...L.loadContext(rules, P), edits }), [], '움직이는 영상은 video_motion 통과');
+}
 
 // 길이 초과, 루프 길이
 const long = structuredClone(edits); long.assets[0] = { ...long.assets[0], in: 0, out: 12, speed: 0.5 };
@@ -260,6 +271,15 @@ eq(['stuckyi.studio', 'https://a.com', 'localhost:3000', '127.0.0.1:4400/app', '
   eq([a.cmd, a.args, a.opts.bg, a.opts.count, a.opts.edit], ['make', ['stuckyi.studio'], '#b987ff', '6', true], '명령줄: 주소와 옵션 (--bg 값, --count=값)');
   eq(C.parseArgs(['retake', 'stuckyi', '02를', '더 오래']).cmd, 'retake', '명령줄: retake');
   eq(C.parseArgs([]).cmd, 'help', '명령줄: 주소가 없으면 도움말');
+  eq([C.parseArgs(['continue', 'stuckyi']).cmd, C.parseArgs(['continue', 'stuckyi']).args], ['continue', ['stuckyi']], '명령줄: continue');
+  {
+    const since = new Date(Date.now() - 1000).toISOString();
+    L.activity('act-test', 'explore', 4); L.activity('act-test', 'try', 3); L.activity('act-test', 'explore', 2);
+    const got = L.activitySince('act-test', since);
+    eq([got.explore, got.try], [6, 3], '활동 기록: 에이전트 시작 뒤 둘러본 화면·돌려 본 시나리오 수');
+    eq(L.activitySince('act-test', new Date(Date.now() + 60000).toISOString()), {}, '활동 기록: 시작 전 기록은 세지 않는다');
+    fs.rmSync(path.join(L.ROOT, '.cache', 'activity', 'act-test.jsonl'), { force: true });
+  }
   eq([C.stepOf({ next: 'P1' }).i, C.stepOf({ next: 'P2' }).i, C.stepOf({ next: 'P3' }).i, C.stepOf({ next: 'P4', todo: 'export' }).i, C.stepOf({ next: 'P4', todo: 'judge' }).i, C.stepOf({ next: 'DONE' }).label], [0, 1, 2, 3, 4, '완성'], '진행 막대: status → 단계');
   eq(C.stepOf({ next: 'P4', todo: 'export' }, 2, 'editor').label, '구간·속도 정하기', '진행 막대: editor가 아직 돌면 status가 앞서가도 그 단계');
   eq(C.stepOf({ next: 'STOP' }, 3).i, 3, '진행 막대: 멈추면 그 자리');

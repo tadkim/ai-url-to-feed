@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // planner가 사이트를 둘러볼 때 쓴다. record.mjs와 같은 viewport·언어·쓰기 차단으로 연다 (배율만 1).
 // 사용: node scripts/explore.mjs <project> [--steps '<JSON 단계 배열>'] [--name <이름>] [--eval '<브라우저에서 실행할 JS 식>']
+//       node scripts/explore.mjs <project> --batch '[{"name":"home"},{"name":"about","steps":[{"goto":"/about"}]},…]'
+//   --batch: 여러 화면을 브라우저 하나에서 한 번에 본다 (동시에 3개씩). 처음 둘러볼 때와 여러 화면을 비교할 때 이걸 쓴다. 출력은 { results: [화면마다 아래 출력] }
 //   --eval: 단계를 실행한 뒤 page.evaluate로 식을 실행해 결과를 `eval`에 담는다. 시나리오의 waitForFunction 조건이 true가 되는지,
 //           요소의 opacity·위치·스크롤 컨테이너가 무엇인지 확인할 때 쓴다. 예: --eval "getComputedStyle(document.querySelector('.card img')).opacity"
 //   단계: goto(경로) · click(선택자) · fill([선택자, 글자]) · press(키) · wait(ms) · waitFor(선택자) · scroll(px) · scrollTo(선택자) · hover(선택자)
@@ -12,25 +14,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { ROOT, loadRules, assertProject, projectConf } from './lib.mjs';
+import { ROOT, loadRules, assertProject, projectConf, activity } from './lib.mjs';
 import { assertTarget, applyContext, runSteps, open } from './browser.mjs';
 
-async function main() {
-  const [project, ...args] = process.argv.slice(2);
-  const opt = (name) => { const i = args.indexOf(name); return i > -1 ? args[i + 1] : undefined; };
-  const rules = loadRules();
-  assertProject(rules, project);
-  const conf = projectConf(rules, project);
-  const steps = opt('--steps') ? JSON.parse(opt('--steps')) : [];
-  const name = (opt('--name') ?? `step-${steps.length}`).replace(/[^\w-]/g, '_');
-  const outDir = path.join(ROOT, '.cache', 'explore', project);   // 저장소 안이어야 Claude가 Read로 열 수 있다. .cache/는 git·편집 범위 검사에서 빠진다
-  fs.mkdirSync(outDir, { recursive: true });
-  await assertTarget(conf);
-
-  const browser = await chromium.launch();
-  const out = { project, steps: steps.length };
+async function exploreOne(browser, rules, conf, outDir, { steps = [], name, evalExpr }) {
+  name = (name ?? `step-${steps.length}`).replace(/[^\w-]/g, '_');
+  const out = { name, steps: steps.length };
+  const ctx = await browser.newContext({ viewport: rules.record.viewport, deviceScaleFactor: 1, locale: rules.record.locale });
   try {
-    const ctx = await browser.newContext({ viewport: rules.record.viewport, deviceScaleFactor: 1, locale: rules.record.locale });
     const counts = await applyContext(ctx, rules, conf);
     const page = await ctx.newPage();
     await open(page, `${conf.url}/`);
@@ -40,7 +31,7 @@ async function main() {
       out.step_error = e.message.split('\n')[0].slice(0, 300);
     }
     await page.waitForTimeout(800);
-    if (opt('--eval')) { try { out.eval = await page.evaluate(opt('--eval')); } catch (e) { out.eval_error = e.message.split('\n')[0].slice(0, 300); } }
+    if (evalExpr) { try { out.eval = await page.evaluate(evalExpr); } catch (e) { out.eval_error = e.message.split('\n')[0].slice(0, 300); } }
     out.url = page.url();
     out.title = await page.title();
     out.screenshot = path.join(outDir, `${name}.png`);
@@ -49,7 +40,6 @@ async function main() {
     out.writes_blocked = counts.blocked;
     out.writes_seen = counts.seen;
     out.blocked_urls = [...(counts.blocked_urls ?? [])].slice(0, 10);   // 읽기인데 POST인 주소면 projects.yaml의 <p>.allow_post에 넣을 후보
-
     // 돌고 있는 애니메이션과 GIF — 루프 클립 길이(주기의 최소공배수)를 정할 때 쓴다
     out.animations = await page.evaluate(() => {
       const seen = new Map();
@@ -96,12 +86,34 @@ async function main() {
       delete el.i;
     }
     out.elements = found;
+  } finally {
     await ctx.close();
+  }
+  return out;
+}
+
+async function main() {
+  const [project, ...args] = process.argv.slice(2);
+  const opt = (name) => { const i = args.indexOf(name); return i > -1 ? args[i + 1] : undefined; };
+  const rules = loadRules();
+  assertProject(rules, project);
+  const conf = projectConf(rules, project);
+  const outDir = path.join(ROOT, '.cache', 'explore', project);   // 저장소 안이어야 Claude가 Read로 열 수 있다. .cache/는 git·편집 범위 검사에서 빠진다
+  fs.mkdirSync(outDir, { recursive: true });
+  await assertTarget(conf);
+  const jobs = opt('--batch')
+    ? JSON.parse(opt('--batch')).map((j) => ({ steps: j.steps ?? [], name: j.name, evalExpr: j.eval }))
+    : [{ steps: opt('--steps') ? JSON.parse(opt('--steps')) : [], name: opt('--name'), evalExpr: opt('--eval') }];
+  activity(project, 'explore', jobs.length);
+  const browser = await chromium.launch();
+  const results = [];
+  try {
+    for (let i = 0; i < jobs.length; i += 3) results.push(...await Promise.all(jobs.slice(i, i + 3).map((j) => exploreOne(browser, rules, conf, outDir, j))));
   } finally {
     await browser.close();
   }
-  console.log(JSON.stringify(out, null, 2));
-  process.exit(out.step_error ? 1 : 0);
+  console.log(JSON.stringify(opt('--batch') ? { project, results } : { project, ...results[0] }, null, 2));
+  process.exit(results.some((r) => r.step_error) ? 1 : 0);
 }
 
 main().catch((e) => { console.error(`explore 오류: ${e.message}`); process.exit(2); });

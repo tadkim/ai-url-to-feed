@@ -19,7 +19,7 @@ AI가 정해진 순서와 기준대로 일하게 묶어 두는 틀(하네스)이
 | 장면 정하기 | AI(planner)가 사이트를 둘러보고 찍을 흐름과 녹화 시나리오를 쓰고, 미리 돌려 보며 고쳐요 |
 | 녹화 | 시나리오대로 모바일 화면을 3배 화질로 찍어요. 사이트에 기록이 남지 않게 저장 요청은 막아요 |
 | 게시물 만들기 | AI(editor)가 쓸 구간·재생 속도를 정하고, 1080×1440 배치·배경색·테두리로 합성해요 |
-| 자동 검사 | 크기·길이·빈 화면·배경색을 검사해서, 걸리면 AI에게 돌려보내 다시 고치게 해요 |
+| 자동 검사 | 크기·길이·빈 화면·배경색에 더해 같은 화면이 두 번 나오는지, 영상이 실제로 움직이는지 검사해서, 걸리면 AI에게 돌려보내 다시 고치게 해요 |
 | 진행 관리 | 단계마다 상태를 남겨 멈춘 곳부터 이어서 하고, 재시도 횟수와 AI가 고칠 수 있는 범위를 지켜요 |
 
 화면을 선명하게 찍는 녹화 엔진은 [walkthrough-recorder](https://github.com/tadkim/walkthrough-recorder)를 써요. 하네스는 그 엔진에 무엇을 찍을지 정해 주고, 결과를 검사하고, 게시물로 만들어요. 자세한 내용은 [동작 방식](docs/how-it-works.md)에 있어요.
@@ -50,6 +50,7 @@ npx ai-url-to-feed stuckyi.studio --bg=#B987FF   # 주소와 배경색. https://
 | 진행 상황 | `npx ai-url-to-feed status stuckyi` |
 | 결과 폴더 열기 | `npx ai-url-to-feed open stuckyi` |
 | 배경색만 바꿔 다시 만들기 | `npx ai-url-to-feed stuckyi.studio --bg=#FDE68A` |
+| 멈췄을 때 이어서 하기 | `npx ai-url-to-feed continue stuckyi` |
 
 같은 주소로 다시 실행하면 멈춘 곳부터 이어서 해요. `stuckyi`는 주소로 정해지는 프로젝트 이름이에요. 단계별 설명은 [시작하기](docs/getting-started.md)에 있어요.
 

@@ -8,13 +8,14 @@
 // 종료 코드: 0 정상, 2 실행 오류
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, loadRules, assertProject, derivedPath, runPath, readIf, ff } from './lib.mjs';
+import { ROOT, loadRules, assertProject, derivedPath, runPath, readIf, ff, activity } from './lib.mjs';
 
 function main() {
   const [project, name, ...args] = process.argv.slice(2);
   const opt = (k) => { const i = args.indexOf(k); return i > -1 ? args[i + 1] : undefined; };
   const rules = loadRules();
   assertProject(rules, project);
+  activity(project, 'frames');   // 명령줄 진행 막대에 "프레임 N번 확인"으로 보인다
   const raw = readIf(derivedPath(rules, project, 'raw'), true);
   const rec = raw?.recordings?.find((r) => r.name === name && !r.error);
   if (!rec) throw new Error(`녹화본 없음: ${name} (raw/manifest.json에 있는 이름: ${(raw?.recordings ?? []).map((r) => r.name).join(', ')})`);

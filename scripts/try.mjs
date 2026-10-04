@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // planner가 시나리오를 미리 돌려 본다. record.mjs와 같은 엔진·언어·쓰기 차단으로 실행하되 배율 1로 찍어 .cache/try/<project>/에 둔다 (git·편집 범위 검사에서 빠진다).
-// 사용: node scripts/try.mjs <project> <recording 이름>
+// 사용: node scripts/try.mjs <project> <recording 이름> [<이름> …]
+//   이름을 여러 개 주면 동시에 돌린다 (시나리오를 다 쓴 뒤 한 번에 확인할 때). 출력은 { results: [이름마다 아래 출력] }
 //   runs/<project>/plan/<이름>.scenario.mjs를 실행한다. plan.json에 아직 없어도 된다.
 // 출력(JSON): 길이, 컨택트 시트 경로(1초 간격 + 끝 프레임, Read로 본다), 영상 경로, 장면 전환 시점, 막힌 쓰기 요청, 오류
 //   대기 조건이 끝나지 않거나 선택자가 틀리면 error에 나온다. 녹화(P2)로 넘기기 전에 여기서 먼저 잡는다.
@@ -9,25 +10,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { record } from 'walkthrough-recorder';
-import { ROOT, loadRules, assertProject, projectConf, loadContext, scenarioErrors, planDir, exists, probe, inspectVideo } from './lib.mjs';
+import { ROOT, loadRules, assertProject, projectConf, loadContext, scenarioErrors, planDir, exists, probe, inspectVideo, activity } from './lib.mjs';
 import { assertTarget, applyContext } from './browser.mjs';
 
-async function main() {
-  const [project, name] = process.argv.slice(2);
-  const rules = loadRules();
-  assertProject(rules, project);
-  const conf = projectConf(rules, project);
+async function tryOne(rules, project, conf, name) {
   const src = path.join(planDir(rules, project), `${name}.scenario.mjs`);
-  if (!exists(src)) throw new Error(`시나리오 파일 없음: ${src}`);
-  const out = { project, name, rule_errors: scenarioErrors(loadContext(rules, project)).filter((e) => e.startsWith(`${name}.scenario.mjs:`)) };
-  await assertTarget(conf);
-
+  const out = { name, rule_errors: scenarioErrors(loadContext(rules, project)).filter((e) => e.startsWith(`${name}.scenario.mjs:`)) };
+  if (!exists(src)) return { ...out, error: `시나리오 파일 없음: ${src}` };
   const rec = rules.record;
   const dir = path.join(ROOT, '.cache', 'try', project);   // 저장소 안이어야 Claude가 Read로 열 수 있다. .cache/는 git·편집 범위 검사에서 빠진다
   fs.mkdirSync(dir, { recursive: true });
   const counts = { seen: 0, blocked: 0 };
-  const log = console.log;
-  console.log = () => {};   // 엔진의 진행 로그를 끈다 (출력은 JSON 하나)
   let t;
   try {
     const mod = (await import(`${pathToFileURL(src).href}?v=${Date.now()}`)).default;
@@ -49,11 +42,26 @@ async function main() {
     out.error = e.message.split('\n').slice(0, 3).join(' / ').slice(0, 500);
   } finally {
     clearTimeout(t);
-    console.log = log;
   }
-  Object.assign(out, { writes_seen: counts.seen, writes_blocked: counts.blocked, blocked_urls: [...(counts.blocked_urls ?? [])].slice(0, 10) });
-  console.log(JSON.stringify(out, null, 2));
-  process.exit(out.error ? 1 : 0);
+  return Object.assign(out, { writes_seen: counts.seen, writes_blocked: counts.blocked, blocked_urls: [...(counts.blocked_urls ?? [])].slice(0, 10) });
+}
+
+async function main() {
+  const [project, ...names] = process.argv.slice(2);
+  const rules = loadRules();
+  assertProject(rules, project);
+  if (!names.length) throw new Error('사용: try.mjs <project> <recording 이름> [<이름> …]');
+  const conf = projectConf(rules, project);
+  await assertTarget(conf);
+  activity(project, 'try', names.length);
+  const log = console.log;
+  console.log = () => {};   // 엔진의 진행 로그를 끈다 (출력은 JSON 하나)
+  let results;
+  // 사이트가 잠깐 느려 첫 페이지 열기가 시간 초과면 그 시나리오만 한 번 더 돌린다 (시나리오 잘못이 아니다)
+  const once = async (n) => { const r = await tryOne(rules, project, conf, n); return /page\.goto: Timeout/.test(r.error ?? '') ? { ...(await tryOne(rules, project, conf, n)), retried: true } : r; };
+  try { results = await Promise.all(names.map(once)); } finally { console.log = log; }
+  console.log(JSON.stringify(names.length > 1 ? { project, results } : { project, ...results[0] }, null, 2));
+  process.exit(results.some((r) => r.error) ? 1 : 0);
 }
 
 main().catch((e) => { console.error(`try 오류: ${e.message}`); process.exit(2); });

@@ -79,6 +79,9 @@ gate:
   same_color_delta_e: 3               # 배경색이 "같다"로 보는 최대 차이 (CIE76)
   blank_share: 0.985                  # 화면 영역의 이 비율 이상이 한 가지 색이면 빈 화면으로 본다
   loop_psnr_min: 40                   # 루프 이음매 (구간 시작 프레임과 끝 프레임) 최소 PSNR dB
+  dup_psnr: 35                        # 서로 다른 에셋의 대표 화면이 이 PSNR(dB) 이상이면 같은 화면으로 본다 (실측: 다른 화면 ≤ 23, 겹친 화면 42~46)
+  static_psnr: 38                     # 영상 구간 안의 화면이 모두 첫 화면과 이 PSNR(dB) 이상이면 거의 멈춘 영상으로 본다 (실측: 실제 영상 ≤ 27)
+  rep_size: [90, 160]                 # 위 두 검사에서 비교할 때 줄이는 크기
   loop_tolerance_seconds: 0.04        # 루프 구간 길이와 주기 최소공배수의 허용 차이 (1프레임 남짓)
 
 retry:
@@ -138,6 +141,14 @@ gates:
   canvas_bg:
     phase: P4
     check: "모든 에셋에서 화면 밖 영역의 색이 style.bg와 same_color_delta_e 안에서 같다"
+    on_fail: P3
+  asset_variety:
+    phase: P4
+    check: "서로 다른 에셋에 같은 화면이 없다 (영상 구간 5곳·이미지 화면끼리 PSNR < gate.dup_psnr). 같은 화면이 두 번 나오면 게시물이 지루해진다"
+    on_fail: P3
+  video_motion:
+    phase: P4
+    check: "영상 에셋은 구간 안에서 움직인다 (구간 5곳 중 하나라도 첫 화면과 PSNR < gate.static_psnr). 거의 멈춘 화면은 이미지로 쓴다"
     on_fail: P3
   loop_seam:
     phase: P4
