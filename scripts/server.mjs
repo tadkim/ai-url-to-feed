@@ -2,6 +2,7 @@
 // 모든 서버는 127.0.0.1에서만 연다.
 import fs from 'node:fs';
 import path from 'node:path';
+import { pipeline } from 'node:stream';
 import { spawn } from 'node:child_process';
 import {
   ROOT, loadRules, projectConf, loadContext, editsErrors, layoutOf, rawSize, assetHash, assetFile,
@@ -26,16 +27,17 @@ export const runScript = (project, script, extra = []) => new Promise((ok) => {
 });
 
 // 영상은 구간 이동(Range)을 받아야 브라우저에서 원하는 시점으로 넘어갈 수 있다
+// 브라우저는 영상을 넘기거나 바꿀 때 요청을 중간에 끊는다. pipe()는 그때 파일을 닫지 않으니 pipeline으로 같이 닫는다
 export function sendFile(req, res, file) {
   const stat = fs.statSync(file);
   const type = TYPES[path.extname(file)] ?? 'application/octet-stream';
   const m = /bytes=(\d*)-(\d*)/.exec(req.headers.range ?? '');
-  if (!m) { res.writeHead(200, { 'Content-Type': type, 'Content-Length': stat.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' }); fs.createReadStream(file).pipe(res); return; }
+  if (!m) { res.writeHead(200, { 'Content-Type': type, 'Content-Length': stat.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' }); pipeline(fs.createReadStream(file), res, () => {}); return; }
   const start = m[1] ? Number(m[1]) : Math.max(0, stat.size - Number(m[2]));
   const end = m[1] && m[2] ? Math.min(Number(m[2]), stat.size - 1) : stat.size - 1;
   if (start > end || start >= stat.size) { res.writeHead(416, { 'Content-Range': `bytes */${stat.size}` }); res.end(); return; }
   res.writeHead(206, { 'Content-Type': type, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${stat.size}`, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' });
-  fs.createReadStream(file, { start, end }).pipe(res);
+  pipeline(fs.createReadStream(file, { start, end }), res, () => {});
 }
 
 // runs/<project>/ 아래에서 화면에 보여 줘도 되는 파일만 (녹화본, 결과, 승인 비교용 이전 버전)
@@ -146,7 +148,7 @@ export async function editorRoutes(req, res, project, sub, url) {
 }
 
 // 기본 포트가 쓰이고 있으면 다음 빈 포트를 쓴다 (--port를 주면 그 포트만)
-export function listen(server, { port, fixed, label, open, onReady }) {
+export function listen(server, { port, fixed, label, open, openPath, onReady }) {
   const base = port;
   server.on('error', (e) => {
     if (e.code === 'EADDRINUSE' && !fixed && port < base + 20) { port += 1; server.listen(port, '127.0.0.1'); return; }
@@ -157,7 +159,8 @@ export function listen(server, { port, fixed, label, open, onReady }) {
   server.on('listening', () => {
     const addr = `http://127.0.0.1:${port}/`;
     onReady?.(addr);
-    const opener = { darwin: ['open', [addr]], win32: ['cmd', ['/c', 'start', '', addr]], linux: ['xdg-open', [addr]] }[process.platform];
+    const target = `${addr}${String(openPath ?? '').replace(/^\//, '')}`;   // --path: 처음 열 화면 (예: /p/stuckyi/edit/)
+    const opener = { darwin: ['open', [target]], win32: ['cmd', ['/c', 'start', '', target]], linux: ['xdg-open', [target]] }[process.platform];
     if (open && opener) spawn(opener[0], opener[1], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
   });
 }

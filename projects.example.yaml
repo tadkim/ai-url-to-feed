@@ -1,10 +1,11 @@
-# 프로젝트 목록 예시. 이 파일을 projects.yaml로 복사해서 고친다 (cp projects.example.yaml projects.yaml)
+# 프로젝트 목록 예시. 보통은 npx ai-url-to-feed <주소> (또는 시작 화면)가 projects.yaml을 만든다. 직접 쓸 때는 복사해서 고친다 (cp projects.example.yaml projects.yaml)
 # projects.yaml은 git에 올리지 않는다 — 클라이언트 주소·이름이 들어가기 때문이다.
 
 projects:                 # 실행 단위. 여기 없는 project는 실행하지 않는다
   my-project:             # 영문 소문자·숫자·- 로. Claude Code에 "my-project 하네스 시작해줘"처럼 부른다
     url: https://example.com          # 끝에 "/"를 붙이지 않는다. 시나리오의 goto('/')가 뒤에 붙는다
     # mode: edit                      # auto(기본, 승인 없이 끝까지) | edit(자동으로 만든 뒤 다듬고 한 번 승인) | review(녹화·완성본 둘 다 승인)
+    # bg: "#B987FF"                   # 배경색 (명령줄 --bg). 없으면 editor가 사이트와 잘 구분되는 색을 고른다. 편집 화면에서 바꾼 색이 우선
     title: 예시 사이트                 # 그 페이지의 <title>. 시작 전에 같은지 본다 (엉뚱한 앱 녹화 방지). 배포 사이트는 생략 가능, local은 필수
     target: deployed                  # deployed | local (local이면 dev 서버를 사람이 먼저 띄운다)
     allow_writes: false               # false면 POST·PUT·PATCH·DELETE 요청을 막는다. true면 막지 않고 개수만 센다

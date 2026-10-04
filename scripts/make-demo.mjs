@@ -140,7 +140,7 @@ const heroRaw = await record({
     await input.pressSequentially(conf.url.replace(/^https?:\/\//, ''), { delay: 40 });   // https:// 없이 넣어도 된다
     await dwell(400);
     await tap('.hero button[type=submit]');
-    await page.waitForSelector('.step');
+    await page.waitForSelector('.chip');
     NAME = new URL(page.url()).pathname.split('/')[2];
     await caption(page, '② 이 문장을 Claude Code에 붙여 넣어요');
     await dwell(1200);
@@ -149,7 +149,7 @@ const heroRaw = await record({
 
     // 이후 시작 화면은 다시 열지 않는다. 화면이 3초마다 스스로 진행 상황을 다시 읽는 것을 그대로 찍는다
     working('planner');   // ---- AI가 장면을 정하고 녹화하는 동안 ----
-    await page.waitForSelector('.step.working', { timeout: 8000 });
+    await page.waitForSelector('.chip.working', { timeout: 8000 });
     await caption(page, '③ AI가 사이트를 둘러보고 찍을 장면을 정해요');
     await dwell(2000);
     working('record');
@@ -170,11 +170,10 @@ const heroRaw = await record({
     await page.waitForSelector('text=완성됐어요', { timeout: 8000 });
     await caption(page, '⑤ 승인 없이 자동으로 완성 — 1080×1440 파일이 남아요');
     await dwell(2000);
-    await nav(page, tap, '.nowcard a.btn.sub[href$="approve/final"]', '.asset');
+    await nav(page, tap, '.donehead a[href$="approve/final"]', '.feed .post');
     await caption(page, '결과를 게시물처럼 넘겨 봐요');
     await dwell(900);
-    await tap('#tabFeed');
-    for (let i = 0; i < 5; i++) { await dwell(700); await tap('.feed > button:last-child', { pre: 120, post: 100 }); }
+    for (let i = 0; i < 5; i++) { await dwell(700); await tap('.feed .nav:last-child', { pre: 120, post: 100 }); }
     await dwell(900);
     await caption(page, '다듬고 싶으면 편집 모드로 — 아래 세부 수정 도구');
     await dwell(1600);
@@ -198,8 +197,10 @@ const editorRaw = await record({
     startCapture();
     t0 = Date.now();
     await dwell(1000);
+    await tap('#panelTabs >> text="속도"');
     await tap('.seg.chips >> text="1.5x"');
     await dwell(900);
+    await tap('#panelTabs >> text="구간"');
     const r = await p.locator('.tl .range').boundingBox();
     const [x, y] = [r.x + r.width - 2, r.y + r.height / 2];
     await p.evaluate(([cx, cy]) => window.__moveCursor?.(cx, cy), [x, y]);
@@ -209,7 +210,7 @@ const editorRaw = await record({
     for (let i = 1; i <= 16; i++) { const nx = x - i * 6; await p.mouse.move(nx, y); await p.evaluate(([cx, cy]) => window.__moveCursor?.(cx, cy), [nx, y]); await dwell(28); }
     await p.mouse.up();
     await dwell(800);
-    await tap('#panelTabs >> text="전체 스타일"');
+    await tap('#panelTabs >> text="배경"');
     const hex = p.locator('input[aria-label="배경색 HEX 값"]');
     await tap(hex, { blur: false });
     await hex.selectText();
@@ -236,11 +237,11 @@ const stills = [];
   fs.rmSync(path.join(DEMO_RUNS, NAME), { recursive: true, force: true });
   fs.rmSync(path.join(DEMO_RUNS, '.harness', 'state', `${NAME}.json`), { force: true });
   await page.goto(`${BASE}/p/${NAME}/`);
-  await page.waitForSelector('.nowcard .say');
+  await page.waitForSelector('.todo2 .say');
   await shot('start');
   working('record');
   await page.goto(`${BASE}/p/${NAME}/`);
-  await page.waitForSelector('.step.working');
+  await page.waitForSelector('.chip.working');
   await shot('working');
   working(null);
   setMode('review');   // 녹화 확인 화면은 꼼꼼 모드에서만 승인 단계로 나온다
@@ -254,8 +255,8 @@ const stills = [];
   setMode('edit');   // 완성본 확인·승인은 편집 모드 화면
   stage('final');
   await page.goto(`${BASE}/p/${NAME}/approve/final`);
-  await page.waitForSelector('.asset');
-  await page.waitForFunction(() => [...document.querySelectorAll('.asset video')].every((v) => v.readyState >= 2), null, { timeout: 15000 }).catch(() => {});
+  await page.waitForSelector('.feed .post');
+  await page.waitForFunction(() => [...document.querySelectorAll('.feed .post video, .alist video')].every((v) => v.readyState >= 2), null, { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(800);
   await shot('approve-final');
   await browser.close();

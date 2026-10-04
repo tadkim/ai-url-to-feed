@@ -8,6 +8,7 @@ tools: Read, Write, Edit, Bash
 
 ## 먼저 읽을 파일
 1. rules.yaml — `assets`(count, layouts), `style`, `edit`, `export.video.max_seconds`, `gate`
+   projects.yaml — 그 프로젝트의 `bg`, `asset_count`, `max_video_seconds` (있으면 rules.yaml보다 우선)
 2. story-service.md — 어기면 안 되는 것 (특히 D: 빈 화면으로 시작·끝나지 않는다)
 3. runs/<project>/plan/plan.json — 에셋 목록과 장면, `loop.periods`
 4. runs/<project>/raw/manifest.json — 녹화본마다 `duration`, `scenes`(장면 전환 시점), `sheet`(컨택트 시트)
@@ -48,7 +49,7 @@ node scripts/frames.mjs <project> <녹화 이름> --from 12 --to 15 --every 0.25
 - **재생 속도**: 결과 길이 = (out − in) ÷ speed. `export.video.max_seconds`를 넘으면 먼저 구간을 줄이고, 그래도 넘으면 속도를 올린다. 조작이 읽히지 않을 만큼 빠르게 하지 않는다 (1.0~1.5를 먼저 쓴다).
 - **루프**: plan의 `loop.periods`를 그대로 옮기고, 구간 길이(out − in)를 주기의 최소공배수로 맞춘다. 진입 모션이 끝난 뒤에서 시작한다. 속도는 1. 시작점은 사람이 편집 화면의 "가장 잘 이어지는 시작점 찾기"로 다시 맞출 수 있다.
 - **이미지 추출 시점**: 전환이 끝나고 화면이 멈춘 순간. 커서가 화면 한가운데를 가리지 않는 순간.
-- **style**: edits.json이 이미 있으면 style을 그대로 둔다 (사람이 고른 값이다). 없으면 `bg`는 앱 배경과 뚜렷이 구분되고 결과물이 잘 보이는 색을 하나 고른다. `border`·`bw`·`radius`는 rules.yaml `style.default`.
+- **style**: edits.json이 이미 있으면 style을 그대로 둔다 (사람이 고른 값이다). 단 projects.yaml의 그 프로젝트에 `bg`가 있고 `style.bg_by`가 `human`이 아니면 `bg`는 그 색이다 (사람이 명령줄 `--bg`로 정한 색, 게이트 style_bg). `bg`가 없으면 앱 배경과 뚜렷이 구분되고 결과물이 잘 보이는 색을 하나 고른다. `bg_by`는 쓰지 않는다 (편집 화면이 쓴다). `border`·`bw`·`radius`는 rules.yaml `style.default`.
 - 재작업이면 `failing`에 나온 에셋만 고친다. 사람이 고친 다른 값은 건드리지 않는다.
 
 ## 끝낼 때

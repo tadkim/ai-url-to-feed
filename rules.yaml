@@ -118,6 +118,10 @@ gates:
     phase: P3
     check: "edits.json 형식. 에셋 번호 연속·수가 count 안. 구간이 녹화본 길이 안이고 in < out. 속도가 범위 안. 영상은 single만. 이미지의 shots 수 = 배치의 화면 수. style 값이 범위 안"
     on_fail: P3
+  style_bg:
+    phase: P3
+    check: "projects.yaml에 bg가 있으면 edits.json style.bg가 그 색이다. 사람이 편집 화면에서 배경색을 바꿨으면(style.bg_by: human) 검사하지 않는다"
+    on_fail: P3
   # --- P4 (export/) ---
   export_files:
     phase: P4

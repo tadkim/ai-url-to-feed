@@ -15,8 +15,16 @@
 | "<project> 완성본 거절: <요청>" | `node scripts/run.mjs reject <project> final --note "<요청>"` → 루프 (P3부터 다시) |
 | "<project> 다시 판정해줘" | `node scripts/judge.mjs <project> --phase P4`만. 내용이 같으면 시도 횟수를 쓰지 않는다 |
 | "<project> 편집 모드로 바꿔줘" / "자동 생성으로 바꿔줘" | projects.yaml `<project>.mode`를 edit / auto로 (auto는 기본값이라 줄을 지운다) → status를 보고 알려 준다 |
+| "<project> 배경색 #RRGGBB로 해줘" | projects.yaml `<project>.bg`를 그 색으로 → status를 본다 (편집값이 다르면 P3로 돌아가 editor가 다시 정한다) |
 | "<project> 계속 진행해" | STOP일 때만. `node scripts/run.mjs unblock <project>` → 루프 |
 | "그 편집은 내가 했어" (end FAIL 뒤) | `node scripts/run.mjs accept <project> <phase>` → 루프 |
+
+### 명령줄 (`npx ai-url-to-feed <주소> [--bg] [--count] [--edit]`, scripts/cli.mjs)
+
+기본 사용 방식이다. 사람이 터미널에서 주소를 넣으면 cli.mjs가 projects.yaml에 등록하고(`bg`, `asset_count`, `mode`), 이 폴더에서 `claude -p "<project> 하네스 시작해줘"`(다음부터 "이어서 해줘")를 `--permission-mode acceptEdits`로 띄운다.
+- 그렇게 불린 세션도 아래 루프를 그대로 따른다. 사람에게 묻지 않는다 (답할 사람이 없다). 승인 단계(APPROVAL_*)나 STOP에 닿으면 보고하고 끝낸다. cli.mjs가 status를 보고 편집 화면을 열거나 사람에게 알린다.
+- 허용 목록(.claude/settings.json)에 없는 명령은 거절된다. 하네스 스크립트와 Read·Write·Edit·에이전트로만 진행한다.
+- `npx ai-url-to-feed retake <p> "<요청>"`은 사람이 친 다시 찍기 요청이다 (cli.mjs가 `run.mjs reject <p> plan --note`로 기록한다).
 
 ### 진행 방식 (projects.yaml `mode`, 기본 auto)
 
@@ -84,4 +92,4 @@ runs/<p>/edit/edits.json은 editor와 사람(편집 화면)이 함께 쓴다.
 - 게이트를 추가하면 rules.yaml `gates` + scripts/lib.mjs `CHECKERS` + scripts/test.mjs 케이스를 함께 추가한다.
 - 녹화 대상 레포의 소스는 고치지 않는다.
 - 이 프로젝트에서 만드는 HTML 화면(scripts/ui/*.html, scripts/review.html)의 아이콘은 **Lucide**만 쓴다. 페이지에서 `/ui/lucide.js`(node_modules/lucide)를 불러오고 `icon('이름')` 도우미로 넣는다 (이름은 lucide.dev의 kebab-case). 이모지나 ↑ ✓ ▶ 같은 글자 기호를 아이콘 대신 쓰지 않는다.
-- 화면은 관리자 대시보드 스타일이다: 검정 상단 바, 연회색 바탕, 흰 패널(회색 머리줄 `.panel > .ph`)과 진한 테두리, 13px 촘촘한 간격, 표·숫자 칩(`.kpi`)으로 요약한다. 넓은 여백과 큰 카드를 쓰지 않는다. 색은 scripts/ui/base.css와 scripts/review.html `:root`의 토큰만 쓴다. 라임(`--accent`)은 채우기에만, 글자·테두리 강조는 `--accent-strong`. 화면을 바꾸면 `node scripts/make-demo.mjs <완성한 프로젝트>`로 README 미리보기를 다시 만든다.
+- 화면은 관리자 대시보드 스타일이다: 검정 상단 바, 연회색 바탕, 흰 패널(회색 머리줄 `.panel > .ph`)과 진한 테두리, 13px 촘촘한 간격, 표·숫자 칩(`.kpi`)으로 요약한다. 넓은 여백과 큰 카드를 쓰지 않는다. 색은 scripts/ui/base.css와 scripts/review.html `:root`의 토큰만 쓴다. 라임(`--accent`)은 채우기에만, 글자·테두리 강조는 `--accent-strong`. 화면을 바꾸면 `node scripts/make-demo.mjs <완성한 프로젝트>`로 README 미리보기를 다시 만든다. 명령줄 출력이 바뀌면 실제로 실행한 출력으로 docs/assets/cli-run.txt를 바꾸고(지어내지 않는다) `node scripts/make-cli-demo.mjs`로 터미널 미리보기를 다시 만든다.

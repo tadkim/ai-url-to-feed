@@ -2,12 +2,16 @@
   "name": "ai-url-to-feed",
   "private": true,
   "type": "module",
+  "bin": {
+    "ai-url-to-feed": "scripts/cli.mjs"
+  },
   "scripts": {
     "status": "node scripts/run.mjs status",
     "judge": "node scripts/judge.mjs",
     "review": "node scripts/review.mjs",
     "test": "node scripts/test.mjs",
-    "start": "node scripts/app.mjs"
+    "start": "node scripts/app.mjs",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
     "lucide": "^1.50.0",

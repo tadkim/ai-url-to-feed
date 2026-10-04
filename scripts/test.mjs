@@ -240,6 +240,55 @@ ok(!readPost('https://firestore.googleapis.com/v1/projects/p/databases/(default)
 eq(['stuckyi.studio', 'https://a.com', 'localhost:3000', '127.0.0.1:4400/app', 'www.a.co.kr/x'].map(L.withScheme),
   ['https://stuckyi.studio', 'https://a.com', 'http://localhost:3000', 'http://127.0.0.1:4400/app', 'https://www.a.co.kr/x'], '주소 앞에 https:// (내 컴퓨터는 http://)를 붙인다');
 
+// 사이트별 배경색 (명령줄 --bg → projects.yaml bg): editor가 따라야 하고, 사람이 편집 화면에서 바꾼 색은 그대로 둔다
+{
+  const ctx = (bg, style) => ({ conf: { bg }, edits: { style } });
+  eq(L.styleBgErrors(ctx(null, { bg: '#112233' })), [], 'bg 없으면 배경색을 검사하지 않는다');
+  ok(L.styleBgErrors(ctx('#B987FF', { bg: '#112233' })).length === 1, 'bg와 다른 배경색이면 FAIL');
+  eq(L.styleBgErrors(ctx('#b987ff', { bg: '#B987FF' })), [], 'bg는 대소문자 구분 없이 같으면 통과');
+  eq(L.styleBgErrors(ctx('#B987FF', { bg: '#112233', bg_by: 'human' })), [], '사람이 편집 화면에서 바꾼 배경색은 그대로 둔다');
+  putEdits({ ...edits, style: { ...style, bg_by: 'ai' } });
+  ok(L.editsErrors(L.loadContext(rules, P)).length > 0, '편집값 규칙: bg_by는 human만');
+  putEdits(edits);
+}
+
+// 명령줄 (cli.mjs): 인자 해석, projects.yaml 등록·설정 바꾸기
+{
+  const C = await import('./cli.mjs');
+  const Pj = await import('./projects.mjs');
+  const a = C.parseArgs(['stuckyi.studio', '--bg', '#b987ff', '--count=6', '--edit']);
+  eq([a.cmd, a.args, a.opts.bg, a.opts.count, a.opts.edit], ['make', ['stuckyi.studio'], '#b987ff', '6', true], '명령줄: 주소와 옵션 (--bg 값, --count=값)');
+  eq(C.parseArgs(['retake', 'stuckyi', '02를', '더 오래']).cmd, 'retake', '명령줄: retake');
+  eq(C.parseArgs([]).cmd, 'help', '명령줄: 주소가 없으면 도움말');
+  eq([C.stepOf({ next: 'P1' }).i, C.stepOf({ next: 'P2' }).i, C.stepOf({ next: 'P3' }).i, C.stepOf({ next: 'P4', todo: 'export' }).i, C.stepOf({ next: 'P4', todo: 'judge' }).i, C.stepOf({ next: 'DONE' }).label], [0, 1, 2, 3, 4, '완성'], '진행 막대: status → 단계');
+  eq(C.stepOf({ next: 'P4', todo: 'export' }, 2, 'editor').label, '구간·속도 정하기', '진행 막대: editor가 아직 돌면 status가 앞서가도 그 단계');
+  eq(C.stepOf({ next: 'STOP' }, 3).i, 3, '진행 막대: 멈추면 그 자리');
+  const bar = C.barParts({ i: 2, label: '구간·속도 정하기', text: '작업 중', ms: 61000 }).map(([, t]) => t).join('');
+  ok(/████████░{12}  40% \| 3\/5 구간·속도 정하기 \| 작업 중 \| 01:01$/.test(bar), '진행 막대 모양', bar);
+  ok(/^✓ █{20} 100% \| 5\/5 완성/.test(C.barParts({ i: 5, label: '완성', ms: 0, done: true }).map(([, t]) => t).join('')), '진행 막대: 완성은 100%');
+  let threw = false; try { C.parseArgs(['a.com', '--edit', '--auto']); } catch { threw = true; }
+  ok(threw, '명령줄: --edit와 --auto는 같이 못 쓴다');
+  threw = false; try { C.parseArgs(['a.com', '--bg']); } catch { threw = true; }
+  ok(threw, '명령줄: --bg에 값이 없으면 막는다');
+  eq([Pj.parseCount('6', rules), Pj.parseCount('5-8', rules)], [[6, 6], [5, 8]], '게시물 수: 하나 또는 범위');
+  threw = false; try { Pj.parseCount('11', rules); } catch { threw = true; }
+  ok(threw, '게시물 수: rules.yaml 범위 밖이면 막는다');
+  eq(Pj.normalizeBg('b987ff'), '#B987FF', '배경색: # 없이 넣어도 된다');
+  threw = false; try { Pj.normalizeBg('purple'); } catch { threw = true; }
+  ok(threw, '배경색: #RRGGBB가 아니면 막는다');
+  const before = fs.readFileSync(process.env.HARNESS_PROJECTS, 'utf8');
+  const r1 = await Pj.addProject('example.com', { bg: 'b987ff', count: '6' });
+  const y = () => L.loadRules().projects;
+  eq([r1.name, r1.existed, y().example], ['example', false, { url: 'https://example.com', bg: '#B987FF', asset_count: [6, 6] }], '등록: 주소 → 이름, bg·asset_count를 적는다');
+  const r2 = await Pj.addProject('https://example.com/', { bg: '#112233', count: '5-10', mode: 'edit' });
+  eq([r2.existed, r2.changed, y().example], [true, ['mode', 'bg', 'asset_count'], { url: 'https://example.com', bg: '#112233', mode: 'edit' }], '다시 등록: 바꾼 설정만 적고, 기본값(5~10)은 줄을 지운다');
+  eq((await Pj.addProject('example.com', { bg: '#000000' }, { update: false })).changed, [], '시작 화면에서 같은 주소: 설정을 바꾸지 않는다');
+  eq(L.projectConf(L.loadRules(), 'example').bg, '#112233', 'projectConf에 bg');
+  const r3 = await Pj.addProject('localhost:3999', { title: '내 앱' });
+  eq(y()[r3.name], { url: 'http://localhost:3999', title: '내 앱', target: 'local' }, '내 컴퓨터 주소: --title로 제목을 적는다 (서버에 묻지 않는다)');
+  fs.writeFileSync(process.env.HARNESS_PROJECTS, before);
+}
+
 // 편집 범위
 node('run.mjs', 'begin', P, 'P3');
 fs.writeFileSync(path.join(TMP, P, 'plan', 'plan.json'), JSON.stringify(plan));

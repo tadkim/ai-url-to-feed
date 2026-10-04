@@ -7,7 +7,7 @@ tools: Read, Write, Edit, Bash
 너는 웹 콘텐츠 포트폴리오 에셋 하네스의 P1 planner다. 계획과 시나리오만 쓰고, 녹화는 하지 않는다.
 
 ## 먼저 읽을 파일
-1. projects.yaml — `projects.<project>`(url, allow_writes), rules.yaml — `record`, `assets`, `export.video.max_seconds`
+1. projects.yaml — `projects.<project>`(url, allow_writes, `asset_count`가 있으면 에셋 수는 그 범위), rules.yaml — `record`, `assets`, `export.video.max_seconds`
 2. story-service.md — 재미있는 작업으로 보이게, 정보는 너무 많지 않게
 3. scripts/record.mjs 맨 위 주석 — 시나리오 파일 형식
 4. 재작업이면: 오케스트레이터가 준 `failing`·`notes`, runs/<project>/raw/manifest.json의 `error`

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 시작 화면 서버: URL 등록, 7단계 진행 상황, 녹화 확인·완성본 승인(비교 화면), 편집 화면.
-// 사용: npm start  (= node scripts/app.mjs [--port N] [--no-open])
+// 사용: npm start  (= node scripts/app.mjs [--port N] [--no-open] [--path /p/<project>/edit/])
 //   - 127.0.0.1에서만 연다. 포트가 쓰이고 있으면 다음 빈 포트를 쓴다.
 //   - 승인·거절 버튼은 사람이 누를 때만 run.mjs approve|reject를 실행한다 (Claude Code에 말로 하는 것과 같은 기록).
 //   - 녹화·편집값 같은 AI 작업은 Claude Code에서 진행한다. 화면은 지금 할 일과 붙여 넣을 문장을 알려 준다.
@@ -8,12 +8,12 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import YAML from 'yaml';
 import {
-  ROOT, PROJECTS_FILE, loadRules, projectConf, loadContext, readIf, readText, exists, derivedPath, runPath, planHash, finalHash,
-  latestHistory, progress, runningAgent, toolProblems, isHuman, assetFile, now, loadState, withScheme,
+  ROOT, PROJECTS_FILE, loadRules, projectConf, loadContext, readIf, exists, derivedPath, runPath, planHash, finalHash,
+  latestHistory, progress, runningAgent, toolProblems, isHuman, assetFile, now, loadState,
   applyPlanAssets, planErrors, writeJson, phasePath, appendLog, ff,
 } from './lib.mjs';
+import { addProject, setProjectFields, projectFields, siteInfo } from './projects.mjs';
 import { send, readBody, editorRoutes, serveRunFile, serveUi, safeStatus, listen, TYPES } from './server.mjs';
 
 const args = process.argv.slice(2);
@@ -28,16 +28,13 @@ async function checkEnv() {
 }
 // 사이트 응답 (2단계): 프로젝트마다 마지막 확인 결과를 기억한다
 const sites = new Map();
-async function checkSite(conf) {
-  try {
-    const r = await fetch(`${conf.url}/`, { redirect: 'follow', signal: AbortSignal.timeout(10000) });
-    const html = await r.text();
-    const title = (/<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? '').trim();
-    const ok = r.ok && (conf.title == null || title === String(conf.title));
-    sites.set(conf.url, { ok, title, error: ok ? null : r.ok ? `제목이 다름: "${title}"` : `HTTP ${r.status}`, at: now() });
-  } catch (e) {
-    sites.set(conf.url, { ok: false, title: null, error: conf.target === 'local' ? '응답 없음 — 개발 서버를 먼저 띄워요' : `응답 없음 (${e.message})`, at: now() });
-  }
+const checking = new Map();   // 확인 중인 주소 → Promise (화면이 3초마다 물어도 한 번만 보낸다)
+function checkSite(conf) {
+  if (!checking.has(conf.url)) checking.set(conf.url, fetchSite(conf).finally(() => checking.delete(conf.url)));
+  return checking.get(conf.url);
+}
+async function fetchSite(conf) {
+  sites.set(conf.url, { ...(await siteInfo(conf)), at: now() });
   return sites.get(conf.url);
 }
 
@@ -45,50 +42,30 @@ function progressOf(rules, project) {
   const base = loadState(rules, project);
   const conf = projectConf(rules, project);
   if (!sites.has(conf.url)) checkSite(conf);   // 처음 한 번은 뒤에서 확인한다
-  return progress(rules, project, base, safeStatus(rules, project), { ...env, site: sites.get(conf.url) });
+  const out = progress(rules, project, base, safeStatus(rules, project), { ...env, site: sites.get(conf.url) });
+  return { ...out, ...previews(rules, project) };
 }
-
-// ---- 프로젝트 등록: URL 하나로 projects.yaml에 추가한다 ----
-function slug(u) {
-  const host = u.hostname.replace(/^www\./, '');
-  const base = ['localhost', '127.0.0.1'].includes(host) ? `local-${u.port || 80}` : host.split('.').slice(0, -1).join('-') || host;
-  return base.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'site';
-}
-async function addProject(raw, mode) {
-  let u;
-  try { u = new URL(withScheme(raw)); } catch { throw new Error('주소 형식이 아니에요 (예: stuckyi.studio, localhost:3000)'); }
-  if (!/^https?:$/.test(u.protocol)) throw new Error('http:// 또는 https:// 주소만 쓸 수 있어요');
-  const url = `${u.origin}${u.pathname}`.replace(/\/+$/, '');
-  const local = ['localhost', '127.0.0.1'].includes(u.hostname);
-  const doc = exists(PROJECTS_FILE) ? YAML.parseDocument(readText(PROJECTS_FILE)) : YAML.parseDocument('# 이 컴퓨터의 프로젝트 목록. git에 올리지 않는다 (.gitignore). 형식은 projects.example.yaml\nprojects: {}\n');
-  if (!doc.get('projects')) doc.set('projects', doc.createNode({}));
-  const existing = doc.get('projects').toJSON?.() ?? {};
-  const same = Object.entries(existing).find(([, p]) => String(p?.url ?? '').replace(/\/+$/, '') === url);
-  if (same) return { name: same[0], existed: true };
-  let name = slug(u);
-  for (let i = 2; existing[name]; i++) name = `${slug(u)}-${i}`;
-  const entry = { url };
-  if (local) {
-    // 로컬 개발 서버는 다른 앱을 녹화하지 않게 지금 페이지 제목을 같이 적는다
-    const s = await checkSite({ url, title: null, target: 'local' });
-    if (!s.ok) throw new Error(s.error);
-    Object.assign(entry, { title: s.title, target: 'local' });
+// 진행 화면에 보여 줄 미리보기: 지금까지 찍은 장면(녹화 주요 장면)과 완성된 게시물 파일
+function previews(rules, project) {
+  const ctx = loadContext(rules, project);
+  const scenes = [];
+  for (const r of (ctx.raw?.recordings ?? []).filter((x) => !x.error)) {
+    const p = ctx.plan?.recordings?.find((x) => x.name === r.name);
+    for (const m of highlightsOf(ctx, r, p).highlights) scenes.push({ rec: r.name, t: m.t, text: m.text, thumb: `/api/projects/${project}/thumb?rec=${encodeURIComponent(r.name)}&t=${m.t.toFixed(1)}` });
   }
-  if (mode && mode !== (loadRules().default_mode ?? 'auto')) entry.mode = mode;   // 기본(auto)이면 적지 않는다
-  doc.setIn(['projects', name], doc.createNode(entry));
-  doc.get('projects').flow = false;   // 빈 목록 "{}"에서 시작해도 사람이 읽기 쉬운 블록 형식으로 쓴다
-  fs.writeFileSync(PROJECTS_FILE, String(doc));
-  return { name, existed: false };
+  const posts = ctx.exp && ctx.edits ? ctx.edits.assets.map((a) => {
+    const m = ctx.exp.assets.find((x) => x.n === a.n);
+    const file = m && exists(runPath(project, `export/${assetFile(a)}`)) ? `${fileUrl(project, `export/${assetFile(a)}`)}?v=${m.hash}` : null;
+    return { n: a.n, type: a.type, file, seconds: a.type === 'video' ? Math.round(((a.out - a.in) / (a.speed ?? 1)) * 10) / 10 : null, scene: a.scene ?? ctx.plan?.assets?.find((x) => x.n === a.n)?.scene ?? '' };
+  }).filter((x) => x.file) : [];
+  return { scenes: scenes.slice(0, 8), posts };
 }
 
 // 진행 방식 바꾸기 (projects.yaml의 mode). AI가 일하는 중에는 바꾸지 않는다
 function setMode(project, mode) {
-  const rules = loadRules();
-  if (!(rules.modes ?? []).includes(mode)) throw Object.assign(new Error(`mode는 ${(rules.modes ?? []).join(' | ')} 중 하나`), { code: 400 });
+  const fields = projectFields({ mode });
   if (runningAgent(project)) throw Object.assign(new Error('AI가 작업 중이라 지금은 바꿀 수 없어요'), { code: 409 });
-  const doc = YAML.parseDocument(readText(PROJECTS_FILE));
-  if (mode === (rules.default_mode ?? 'auto')) doc.deleteIn(['projects', project, 'mode']); else doc.setIn(['projects', project, 'mode'], mode);
-  fs.writeFileSync(PROJECTS_FILE, String(doc));
+  setProjectFields(project, fields);
 }
 
 // ---- 승인 비교 화면 데이터 ----
@@ -245,7 +222,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/projects') {
       const body = JSON.parse((await readBody(req)) || '{}');
       try {
-        const r = await addProject(body.url, ['auto', 'edit', 'review'].includes(body.mode) ? body.mode : undefined);
+        const r = await addProject(body.url, { mode: ['auto', 'edit', 'review'].includes(body.mode) ? body.mode : undefined }, { checkSite, update: false });   // 이미 있는 주소면 설정을 바꾸지 않는다
         const fresh = loadRules();
         await checkSite(projectConf(fresh, r.name));
         return send(res, 200, { ...r, progress: progressOf(fresh, r.name) });
@@ -304,6 +281,6 @@ const server = http.createServer(async (req, res) => {
 
 await checkEnv();
 listen(server, {
-  port: Number(opt('--port') ?? loadRules().review.port), fixed: opt('--port') != null, label: 'app', open: !args.includes('--no-open'),
+  port: Number(opt('--port') ?? loadRules().review.port), fixed: opt('--port') != null, label: 'app', open: !args.includes('--no-open'), openPath: opt('--path'),
   onReady: (addr) => console.log(`시작 화면: ${addr}  (끝내려면 Ctrl+C)`),
 });

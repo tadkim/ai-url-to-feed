@@ -78,6 +78,7 @@ export function projectConf(rules, project) {
     url: String(p.url).replace(/\/+$/, ''),
     count: p.asset_count ?? rules.assets.count,
     maxVideoSeconds: p.max_video_seconds ?? rules.export.video.max_seconds,
+    bg: p.bg ?? null,   // 사이트별 배경색 (명령줄 --bg). 없으면 editor가 고른다
     mode: modeOf(rules, p),
   };
 }
@@ -368,6 +369,15 @@ export function rawErrors(ctx) {
   return errs;
 }
 
+// projects.yaml에 bg가 있으면 그 색을 쓴다. 사람이 편집 화면에서 바꾼 색(bg_by: human)은 그대로 둔다
+export function styleBgErrors(ctx) {
+  const want = ctx.conf.bg;
+  const s = ctx.edits?.style;
+  if (want == null || !s || s.bg_by === 'human') return [];
+  if (!isHex(want)) return [`projects.yaml bg는 #RRGGBB: ${want}`];
+  return String(s.bg).toUpperCase() === String(want).toUpperCase() ? [] : [`style.bg(${s.bg})가 projects.yaml bg(${want})와 다르다 — 그 색으로 바꾼다`];
+}
+
 export function editsErrors(ctx) {
   const { rules, edits, raw, conf } = ctx;
   if (!edits) return ['edits.json이 없거나 JSON이 아니다'];
@@ -375,6 +385,7 @@ export function editsErrors(ctx) {
   const errs = [];
   const s = edits.style ?? {};
   if (!isHex(s.bg)) errs.push(`style.bg는 #RRGGBB: ${s.bg}`);
+  if (s.bg_by !== undefined && s.bg_by !== 'human') errs.push(`style.bg_by는 human만 쓴다 (편집 화면에서 사람이 배경색을 바꿨다는 표시): ${s.bg_by}`);
   if (!isHex(s.border)) errs.push(`style.border는 #RRGGBB: ${s.border}`);
   if (!Number.isInteger(s.bw) || !inRange(s.bw, rules.style.bw)) errs.push(`style.bw는 ${rules.style.bw.join('~')} 정수: ${s.bw}`);
   if (!Number.isInteger(s.radius) || !inRange(s.radius, rules.style.radius)) errs.push(`style.radius는 ${rules.style.radius.join('~')} 정수: ${s.radius}`);
@@ -537,6 +548,7 @@ export const CHECKERS = {
   approval_plan: (ctx) => approvalOk(ctx, 'approval_plan', planHash(ctx.rules, ctx.project)),
   raw_files: rawErrors,
   edits_valid: editsErrors,
+  style_bg: styleBgErrors,
   export_files: exportErrors,
   video_length: lengthErrors,
   clip_edges: edgeErrors,
