@@ -5,19 +5,30 @@ $ npm install
 added 25 packages, and audited 26 packages in 3s
 found 0 vulnerabilities
 #! ② 주소와 배경색을 넣고 실행해요
-$ npx ai-url-to-feed stuckyi.studio --bg=#C4B5FD
+$ npx ai-url-to-feed stuckyi.studio --bg=#B987FF
 환경 확인      Node 22.23.1 · ffmpeg · chromium 완료
-사이트 등록    https://stuckyi.studio → stuckyi (이미 등록됨 · 바꾼 설정: bg)  배경 #C4B5FD · 게시물 5~10개
-#! ③ Claude Code를 대신 띄워 AI가 진행해요
-@{"t":46,"i":2,"label":"구간·속도 정하기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P3"}
-@{"t":8106,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기)","next":"P3"}
-@{"t":16101,"i":3,"label":"파일 만들기","text":"AI가 작업 중이에요 (구간·속도 정하기)","next":"P4"}
-@{"t":28105,"i":3,"label":"파일 만들기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
-@{"t":32115,"i":3,"label":"파일 만들기","text":"영상·이미지 파일을 만드는 중이에요","next":"P4"}
-@{"t":34103,"i":4,"label":"자동 검사","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
-@{"t":38115,"i":5,"label":"완성","text":"","next":"DONE"}
-#! ④ 승인 없이 완성 — 1080×1440 파일이 남아요
+사이트 등록    https://stuckyi.studio → stuckyi (새로 등록)  배경 #B987FF · 게시물 5~10개
+#! ③ AI가 장면을 정하고 녹화해요 — Claude Code를 대신 띄워요
+@{"t":35,"i":0,"label":"장면 계획","text":"Claude Code가 다음 할 일을 정하는 중","next":"P1"}
+@{"t":10088,"i":0,"label":"장면 계획","text":"AI가 작업 중이에요 (장면 계획·녹화 준비)","next":"P1"}
+@{"t":660442,"i":1,"label":"녹화","text":"Claude Code가 다음 할 일을 정하는 중","next":"P2"}
+@{"t":668447,"i":1,"label":"녹화","text":"녹화하는 중이에요","next":"P2"}
+#! ④ 구간·속도를 정하고 1080×1440 파일을 만들어요
+@{"t":744476,"i":2,"label":"구간·속도 정하기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P3"}
+@{"t":752496,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기)","next":"P3"}
+@{"t":940578,"i":3,"label":"파일 만들기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
+@{"t":946584,"i":3,"label":"파일 만들기","text":"영상·이미지 파일을 만드는 중이에요","next":"P4"}
+@{"t":950592,"i":4,"label":"자동 검사","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
+#! 자동 검사에서 걸리면 AI가 다시 고쳐요
+@{"t":952599,"i":2,"label":"구간·속도 정하기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P3"}
+@{"t":958599,"i":2,"label":"구간·속도 정하기","text":"AI가 작업 중이에요 (구간·속도 정하기)","next":"P3"}
+@{"t":1018619,"i":3,"label":"파일 만들기","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
+@{"t":1024627,"i":3,"label":"파일 만들기","text":"영상·이미지 파일을 만드는 중이에요","next":"P4"}
+@{"t":1026633,"i":4,"label":"자동 검사","text":"Claude Code가 다음 할 일을 정하는 중","next":"P4"}
+#! ⑤ 승인 없이 완성 — 실제 17분 23초
+@{"t":1028640,"i":5,"label":"완성","text":"","next":"DONE"}
 
-완성  runs/stuckyi/export/  01.mp4 02.mp4 03.png 04.mp4 05.png 06.png
-  자동 모드 — 모든 자동 검사 PASS (사람 승인 없이 완성) · 0분 48초
+완성  runs/stuckyi/export/  01.mp4 02.png 03.mp4 04.png 05.mp4 06.png 07.png
+  자동 모드 — 모든 자동 검사 PASS (사람 승인 없이 완성) · 17분 23초
+  결과 폴더 열기: npx ai-url-to-feed open stuckyi · 게시물처럼 넘겨 보기: npx ai-url-to-feed ui
 #! results
