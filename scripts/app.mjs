@@ -13,7 +13,7 @@ import {
   latestHistory, progress, runningAgent, toolProblems, isHuman, assetFile, now, loadState,
   applyPlanAssets, planErrors, writeJson, phasePath, appendLog, ff,
 } from './lib.mjs';
-import { addProject, setProjectFields, projectFields, siteInfo } from './projects.mjs';
+import { addProject, setProjectFields, projectFields, siteInfo, projectSummary, deleteProject } from './projects.mjs';
 import { send, readBody, editorRoutes, serveRunFile, serveUi, safeStatus, listen, TYPES } from './server.mjs';
 
 const args = process.argv.slice(2);
@@ -234,6 +234,17 @@ const server = http.createServer(async (req, res) => {
       if (!rules.projects[project]) return send(res, 404, { error: `등록되지 않은 프로젝트: ${project}` });
       if (kind === 'api/projects') {
         if (req.method === 'GET' && rest === 'progress') return send(res, 200, progressOf(rules, project));
+        // 삭제: 확인 창에 보여 줄 요약, 그리고 실제 삭제 (진행 중이면 멈추고 지운다). 이름을 똑같이 적어야 지운다
+        if (req.method === 'GET' && rest === 'summary') return send(res, 200, projectSummary(rules, project));
+        if (req.method === 'DELETE' && rest === '') {
+          try {
+            const body = JSON.parse((await readBody(req)) || '{}');
+            if (body.confirm !== project) return send(res, 400, { error: '확인을 위해 프로젝트 이름을 똑같이 적어 주세요' });
+            const r = await deleteProject(project, { keepExport: !!body.keepExport });
+            sites.delete(r.url); checking.delete(r.url);
+            return send(res, 200, r);
+          } catch (e) { return send(res, e.code ?? 500, { error: e.message }); }
+        }
         if (req.method === 'POST' && rest === 'mode') {
           try { setMode(project, JSON.parse((await readBody(req)) || '{}').mode); return send(res, 200, progressOf(loadRules(), project)); }
           catch (e) { return send(res, e.code ?? 400, { error: e.message }); }

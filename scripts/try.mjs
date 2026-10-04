@@ -11,7 +11,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { record } from 'walkthrough-recorder';
 import { ROOT, loadRules, assertProject, projectConf, loadContext, scenarioErrors, planDir, exists, probe, inspectVideo, activity } from './lib.mjs';
-import { assertTarget, applyContext } from './browser.mjs';
+import { assertTarget, applyContext, ignoreClosedCapture } from './browser.mjs';
+
+ignoreClosedCapture();
 
 async function tryOne(rules, project, conf, name) {
   const src = path.join(planDir(rules, project), `${name}.scenario.mjs`);

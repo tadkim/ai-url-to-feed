@@ -55,6 +55,7 @@ npx ai-url-to-feed stuckyi.studio --bg=#B987FF   # 주소와 배경색. https://
 | 결과 폴더 열기 | `npx ai-url-to-feed open stuckyi` |
 | 배경색만 바꿔 다시 만들기 | `npx ai-url-to-feed stuckyi.studio --bg=#FDE68A` |
 | 멈췄을 때 이어서 하기 | `npx ai-url-to-feed continue stuckyi` |
+| 사이트와 기록 삭제 (진행 중이어도) | `npx ai-url-to-feed delete stuckyi` 또는 시작 화면의 **삭제** |
 
 같은 주소로 다시 실행하면 멈춘 곳부터 이어서 해요. `stuckyi`는 주소로 정해지는 프로젝트 이름이에요. 단계별 설명은 [시작하기](docs/getting-started.md)에 있어요.
 

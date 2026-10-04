@@ -83,6 +83,7 @@ Claude Code가 한 일은 `runs/.harness/log/stuckyi-claude.log`에 남아요. �
 | 배경색만 바꿔 다시 만들기 | `npx ai-url-to-feed stuckyi.studio --bg=#FDE68A` |
 | 장면 자체를 다시 찍기 | `npx ai-url-to-feed retake stuckyi "02는 지도 화면을 더 오래 보여 줘"` |
 | 멈췄을 때 이어서 하기 | `npx ai-url-to-feed continue stuckyi` (멈춤(STOP)도 풀어요) |
+| 사이트와 기록 삭제 | `npx ai-url-to-feed delete stuckyi` (`--keep`이면 게시물 파일은 `runs/_kept/`에 남겨요). 시작 화면의 **삭제** 버튼도 같아요. 진행 중이면 멈추고 지워요 |
 | 게시물처럼 넘겨 보기 | `npx ai-url-to-feed ui` → **결과 보기** |
 
 ## 진행 방식

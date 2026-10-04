@@ -9,7 +9,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, runningCli, clearStaleAgents, stateDir, activityText, markCli } from './lib.mjs';
-import { addProject } from './projects.mjs';
+import { addProject, projectSummary, deleteProject } from './projects.mjs';
+import readline from 'node:readline/promises';
 import { status } from './run.mjs';
 
 const HELP = `ai-url-to-feed — URL 하나로 인스타그램 3:4(1080×1440) 영상·이미지를 만들어요
@@ -26,12 +27,13 @@ const HELP = `ai-url-to-feed — URL 하나로 인스타그램 3:4(1080×1440) �
   npx ai-url-to-feed open <프로젝트>     결과 폴더 열기
   npx ai-url-to-feed retake <프로젝트> "<요청>"   요청대로 장면을 다시 찍고 다시 만들어요
   npx ai-url-to-feed continue <프로젝트> 멈춘 곳부터 다시 진행해요 (멈춤(STOP)도 풀어요)
+  npx ai-url-to-feed delete <프로젝트> [--keep] 사이트와 만든 기록 삭제 (진행 중이면 멈추고, --keep은 게시물 파일만 남겨요)
   npx ai-url-to-feed ui [--port 4455]    시작 화면(HTML)을 열어요
 
 같은 주소로 다시 실행하면 이어서 진행해요. 옵션을 바꿔 다시 실행하면 그 설정으로 다시 만들어요.`;
 
 const VALUE_FLAGS = ['bg', 'count', 'title', 'port'];
-const COMMANDS = ['status', 'open', 'retake', 'continue', 'ui', 'help'];
+const COMMANDS = ['status', 'open', 'retake', 'continue', 'delete', 'ui', 'help'];
 
 // --bg=#fff, --bg #fff 둘 다 받는다
 export function parseArgs(argv) {
@@ -224,11 +226,17 @@ async function drive(project, phrase) {
       fs.appendFileSync(logFile, `\n===== ${new Date().toISOString()} claude -p "${text}"\n`);
       const fd = fs.openSync(logFile, 'a');
       // 결과는 JSON 한 덩어리(사용량 포함)로 받는다. 보고 글은 기록 파일에 남긴다
-      const child = spawn('claude', ['-p', text, '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', 'pipe', fd], env: { ...process.env, HARNESS_CLI_PID: String(process.pid) } });
+      // Claude Code를 자기 프로세스 묶음으로 띄운다 (Windows 제외). 멈출 때 그 아래 도구·브라우저까지 묶음째 끄려고
+      const group = process.platform !== 'win32';
+      const child = spawn('claude', ['-p', text, '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', 'pipe', fd], detached: group, env: { ...process.env, HARNESS_CLI_PID: String(process.pid) } });
+      markCli(project, group ? child.pid : null);
+      const killChild = () => { try { if (group) process.kill(-child.pid, 'SIGTERM'); else child.kill('SIGTERM'); } catch { /* 이미 끝났다 */ } };
+      process.once('exit', killChild);   // 명령줄이 어떤 이유로 끝나든 Claude Code가 남지 않게
       let stdout = '';
       child.stdout.on('data', (d) => { stdout += d; });
-      const stop = () => { child.kill('SIGTERM'); wrapOn(); if (isTTY) process.stdout.write('\n'); say(`\n멈췄어요. 이어서 하려면 같은 명령을 다시 실행해요. 기록: ${path.relative(process.cwd(), logFile)}`); process.exit(130); };
+      const stop = (sig) => { killChild(); wrapOn(); if (sig === 'SIGTERM') process.exit(143); if (isTTY) process.stdout.write('\n'); say(`\n멈췄어요. 이어서 하려면 같은 명령을 다시 실행해요. 기록: ${path.relative(process.cwd(), logFile)}`); process.exit(130); };
       process.once('SIGINT', stop);
+      process.once('SIGTERM', stop);   // 시작 화면의 삭제 등 다른 곳에서 멈출 때
       tick();
       const timer = setInterval(tick, 2000);
       const code = await new Promise((ok) => child.on('close', ok));
@@ -239,6 +247,8 @@ async function drive(project, phrase) {
       } catch { fs.appendFileSync(logFile, stdout); }
       clearInterval(timer);
       process.removeListener('SIGINT', stop);
+      process.removeListener('SIGTERM', stop);
+      process.removeListener('exit', killChild);
       fs.closeSync(fd);
       const s = tick();
       if (['DONE', 'STOP', 'APPROVAL_FINAL', 'APPROVAL_PLAN'].includes(s.next)) {
@@ -354,6 +364,27 @@ async function resume(project, port) {
   return res === 'approval' ? afterApproval(project, port) : res;
 }
 
+// 삭제: 무엇이 지워지는지 보여 주고, 이름을 똑같이 입력해야 지운다 (--yes면 묻지 않는다)
+async function remove(project, opts) {
+  const rules = loadRules();
+  assertProject(rules, project);
+  const s = projectSummary(rules, project);
+  say(`${bold(`${project} 사이트를 삭제할까요?`)}  ${dim(s.url)}`);
+  say(`  게시물 파일 ${s.posts}개 · 녹화본 ${s.recordings}개 · 촬영 계획·편집값·검사 결과·진행 기록`);
+  if (s.running) say(red(`  지금 진행 중이에요. 삭제하면 진행을 멈추고 지워요.${s.running.chat ? ' 대화창의 Claude Code에서 진행 중이면 그 창은 직접 멈춰 주세요.' : ''}`));
+  if (opts.keep) say(dim('  게시물 파일은 runs/_kept/로 옮겨 남겨요'));
+  if (!opts.yes) {
+    if (!process.stdin.isTTY) { say(red('확인할 수 없어요. 터미널에서 실행하거나 --yes를 붙여요')); return 1; }
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const typed = (await rl.question(`  확인을 위해 이름(${bold(project)})을 그대로 입력해요: `)).trim();
+    rl.close();
+    if (typed !== project) { say('취소했어요'); return 1; }
+  }
+  const r = await deleteProject(project, { keepExport: !!opts.keep });
+  say(`${green('삭제했어요')}  ${project}${r.stopped.length ? dim(` (${r.stopped.join('·')} 멈춤)`) : ''}${r.kept ? dim(` · 게시물은 ${r.kept}/에 남겼어요`) : ''}`);
+  return 0;
+}
+
 async function main(argv) {
   const { cmd, args, opts } = parseArgs(argv);
   if (cmd === 'help') { say(HELP); return 0; }
@@ -361,6 +392,7 @@ async function main(argv) {
   if (cmd === 'status') return args[0] ? showStatus(args[0]) : (say(red('프로젝트 이름을 적어요: npx ai-url-to-feed status <프로젝트>')), 1);
   if (cmd === 'open') return args[0] ? openExport(args[0]) : (say(red('프로젝트 이름을 적어요: npx ai-url-to-feed open <프로젝트>')), 1);
   if (cmd === 'retake') return retake(args[0], args.slice(1).join(' '));
+  if (cmd === 'delete') return args[0] ? remove(args[0], opts) : (say(red('프로젝트 이름을 적어요: npx ai-url-to-feed delete <프로젝트>')), 1);
   if (cmd === 'continue') return args[0] ? resume(args[0], opts.port) : (say(red('프로젝트 이름을 적어요: npx ai-url-to-feed continue <프로젝트>')), 1);
   if (args.length > 1) { say(red(`주소는 하나만 넣어요: ${args.join(' ')}`)); return 1; }
   return make(args[0], opts);

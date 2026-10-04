@@ -22,6 +22,15 @@ export async function assertTarget(conf) {
   return title;
 }
 
+// 시나리오가 녹화 중에 오류로 끝나면 엔진이 브라우저를 닫고, 아직 돌던 캡처 루프의 page.waitForTimeout이 처리되지 않은 거부로 프로세스를 죽인다.
+// 그러면 시나리오의 진짜 오류(record()가 던진다)와 manifest가 남지 않는다 — 이 거부만 무시한다 (kyobobookdamgi — 2026-10-04)
+export function ignoreClosedCapture() {
+  process.on('unhandledRejection', (e) => {
+    if (/Target page, context or browser has been closed/.test(e?.message ?? '')) return;
+    throw e;
+  });
+}
+
 // 컨텍스트에 언어와 쓰기 차단을 건다. counts: { seen, blocked }에 쓰기 요청 수를 센다.
 // 녹화 엔진은 컨텍스트를 직접 만들기 때문에 locale 옵션 대신 헤더와 navigator 값을 덮어쓴다
 export async function applyContext(context, rules, conf, counts = { seen: 0, blocked: 0 }) {

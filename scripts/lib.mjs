@@ -696,10 +696,12 @@ export function markBusy(project, task) {
 }
 // 명령줄(npx ai-url-to-feed)이 Claude Code를 띄워 진행하는 중이라는 표시 — 시작 화면이 "Claude Code에 말하세요" 대신 "진행 중"을 보여 준다
 const cliFile = (project) => path.join(RUNS, '.harness', 'cli', `${project}.json`);
-export function markCli(project) {
+// child: 명령줄이 띄운 Claude Code의 프로세스 묶음 번호 (삭제할 때 명령줄이 응답하지 않아도 그 묶음까지 끈다)
+export function markCli(project, child = null) {
   const f = cliFile(project);
   fs.mkdirSync(path.dirname(f), { recursive: true });
-  fs.writeFileSync(f, JSON.stringify({ pid: process.pid, started_at: now() }));
+  const prev = readIf(f, true);
+  fs.writeFileSync(f, JSON.stringify({ pid: process.pid, started_at: prev?.pid === process.pid ? prev.started_at : now(), child }));
   process.on('exit', () => { try { if (JSON.parse(fs.readFileSync(f, 'utf8')).pid === process.pid) fs.rmSync(f); } catch { /* 이미 없다 */ } });
 }
 export function runningCli(project) {

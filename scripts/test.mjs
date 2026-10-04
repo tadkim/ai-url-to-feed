@@ -336,6 +336,44 @@ node('run.mjs', 'begin', P, 'P3');
 fs.writeFileSync(path.join(TMP, P, 'plan', 'plan.json'), JSON.stringify(plan));
 eq(node('run.mjs', 'end', P, 'P3').code, 1, 'editor가 plan/을 고치면 FAIL');
 
+// 삭제: 진행 중인 명령줄·Claude Code 묶음·녹화 프로세스를 멈추고, 등록·기록·캐시를 지운다. 게시물만 남길 수도 있다
+{
+  const Pj = await import('./projects.mjs');
+  const { spawn } = await import('node:child_process');
+  const before = fs.readFileSync(process.env.HARNESS_PROJECTS, 'utf8');
+  const D = 'del-test';
+  fs.appendFileSync(process.env.HARNESS_PROJECTS, `  ${D}:\n    url: https://del.example.com\n`);
+  const run = (rel, text = 'x') => { const f = L.runPath(D, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, text); };
+  run('export/01.mp4'); run('export/02.png'); run('raw/r1.mp4'); run('plan/plan.json', '{}');
+  const sd = L.stateDir(rules);
+  const put = (f, text) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, text); };
+  put(path.join(sd, 'state', `${D}.json`), '{}'); put(path.join(sd, 'log', `${D}-cli.jsonl`), '');
+  put(path.join(L.RUNS, '.harness', 'scope', `${D}-P1.json`), JSON.stringify({ project: D, phase: 'P1', agent: 'planner', started_at: L.now(), files: {} }));
+  put(L.activityFile(D), ''); put(path.join(L.ROOT, '.cache', 'explore', D, 'a.png'), 'x');
+  const forever = ['-e', 'setInterval(() => {}, 1000)'];
+  const group = process.platform !== 'win32';
+  const cli = spawn(process.execPath, forever, { stdio: 'ignore' });
+  const claude = spawn(process.execPath, forever, { stdio: 'ignore', detached: group });
+  const rec = spawn(process.execPath, forever, { stdio: 'ignore' });
+  put(path.join(L.RUNS, '.harness', 'cli', `${D}.json`), JSON.stringify({ pid: cli.pid, started_at: L.now(), child: group ? claude.pid : null }));
+  put(path.join(L.RUNS, '.harness', 'busy', `${D}.json`), JSON.stringify({ task: 'record', pid: rec.pid, started_at: L.now() }));
+  const sum = Pj.projectSummary(L.loadRules(), D);
+  eq([sum.posts, sum.recordings, sum.running?.cli, sum.running?.chat], [2, 1, true, false], '삭제 요약: 게시물·녹화본 수, 명령줄로 진행 중');
+  const r = await Pj.deleteProject(D, { keepExport: true });
+  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  await new Promise((ok) => setTimeout(ok, 300));
+  eq([alive(cli.pid), alive(rec.pid)], [false, false], '삭제: 진행 중인 명령줄·녹화 프로세스를 멈춘다');
+  if (group) eq(alive(claude.pid), false, '삭제: 명령줄이 띄운 Claude Code 묶음까지 멈춘다'); else claude.kill();
+  eq(r.stopped, ['명령줄', '녹화'], '삭제: 멈춘 것을 알려 준다');
+  ok(!fs.existsSync(L.runPath(D, '')) && !fs.existsSync(path.join(sd, 'state', `${D}.json`)) && !fs.existsSync(path.join(L.RUNS, '.harness', 'scope', `${D}-P1.json`)) && !fs.existsSync(L.activityFile(D)) && !fs.existsSync(path.join(L.ROOT, '.cache', 'explore', D)), '삭제: 기록·상태·작업 표시·캐시를 지운다');
+  ok(r.kept && fs.existsSync(path.join(L.ROOT, r.kept, '01.mp4')), '삭제: 게시물 파일은 남겨 둘 수 있다', r.kept);
+  eq(L.loadRules().projects[D], undefined, '삭제: projects.yaml에서 뺀다');
+  let threw = false; try { await Pj.deleteProject('../x'); } catch { threw = true; }
+  ok(threw, '삭제: 등록되지 않은 이름·경로는 거부한다');
+  fs.rmSync(path.join(L.ROOT, r.kept), { recursive: true, force: true });
+  fs.writeFileSync(process.env.HARNESS_PROJECTS, before);
+}
+
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(`${count - failed}/${count} PASS`);
 process.exit(failed ? 1 : 0);

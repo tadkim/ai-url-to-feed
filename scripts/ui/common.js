@@ -38,10 +38,53 @@ export async function copy(text) {
 // Claude Code에 붙여 넣을 문장
 export const sayBox = (text) => h('div', { class: 'say' }, icon('terminal', 16), h('code', {}, text), h('button', { onclick: () => copy(text), 'aria-label': `${text} 복사` }, icon('copy', 14), ' 복사'));
 export const projectFromPath = () => /^\/p\/([a-z0-9-]+)/.exec(location.pathname)?.[1] ?? null;
+// 대화 상자: Esc·바깥 누르기로 닫고, 열려 있는 동안 Tab 포커스를 안에 가두고, 닫으면 연 버튼으로 포커스를 돌려준다
 export function modal(title, ...body) {
-  const back = h('div', { class: 'modal-back', onclick: (e) => { if (e.target === back) back.remove(); } },
-    h('div', { class: 'modal', role: 'dialog', 'aria-label': title }, h('h3', {}, title), ...body));
+  const opener = document.activeElement;
+  const id = `m${Math.random().toString(36).slice(2, 8)}`;
+  const box = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': id }, h('h3', { id }, title), ...body);
+  const back = h('div', { class: 'modal-back', onclick: (e) => { if (e.target === back) close(); } }, box);
+  const focusables = () => [...box.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.disabled);
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    if (e.key === 'Tab') { const f = focusables(); if (!f.length) return; const [a, z] = [f[0], f.at(-1)]; if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); } }
+  };
+  function close() { if (!back.isConnected) return; document.removeEventListener('keydown', onKey); back.remove(); opener?.focus?.(); }
+  back.close = close;
+  document.addEventListener('keydown', onKey);
   document.body.append(back);
+  (box.querySelector('[autofocus]') ?? focusables()[0])?.focus();
   return back;
+}
+
+// 되돌릴 수 없는 일 확인 (참고: 미리캔버스 워크스페이스 삭제 — 무엇이 사라지는지, 경고, 이름을 똑같이 입력해야 버튼이 켜진다)
+// opts: { title, desc, items: [[아이콘, 글]], warn, option: { label, hint }, word, confirmText, onConfirm(optionChecked) }
+export function dangerDialog({ title, desc, items = [], warn, option, word, confirmText, onConfirm }) {
+  const input = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', autofocus: true, 'aria-label': `확인을 위해 ${word} 입력` });
+  const check = option && h('input', { type: 'checkbox' });
+  const err = h('div', { class: 'dz-err', role: 'alert' });
+  const go = h('button', { class: 'dz-go', disabled: true }, icon('trash-2', 15), ` ${confirmText}`);
+  const cancel = h('button', { class: 'dz-cancel' }, '취소');
+  input.addEventListener('input', () => { go.disabled = input.value.trim() !== word; });
+  const m = modal(title,
+    h('button', { class: 'dz-x', 'aria-label': '닫기', onclick: () => m.close() }, icon('x', 18)),
+    desc && h('p', { class: 'dz-desc' }, desc),
+    items.length ? h('ul', { class: 'dz-list' }, items.map(([ic, text]) => h('li', {}, icon(ic, 15), h('span', {}, text)))) : null,
+    warn && h('div', { class: 'dz-warn', role: 'note' }, icon('triangle-alert', 16), h('div', {}, warn)),
+    option && h('label', { class: 'dz-opt' }, check, h('span', {}, h('b', {}, option.label), option.hint && h('small', {}, option.hint))),
+    h('label', { class: 'dz-word' }, h('span', {}, '확인을 위해 이름(', h('code', {}, word), ')을 그대로 입력해요'), input),
+    err,
+    h('div', { class: 'dz-foot' }, cancel, go));
+  m.querySelector('.modal').classList.add('dz');
+  cancel.addEventListener('click', () => m.close());
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !go.disabled) go.click(); });
+  go.addEventListener('click', async () => {
+    go.disabled = true; cancel.disabled = true; input.disabled = true;
+    go.replaceChildren(icon('loader-circle', 15), ' 처리 중…');
+    go.querySelector('.icon')?.classList.add('spin');
+    try { await onConfirm(!!check?.checked); m.close(); }
+    catch (e) { err.textContent = e.message; go.replaceChildren(icon('trash-2', 15), ` ${confirmText}`); go.disabled = false; cancel.disabled = false; input.disabled = false; }
+  });
+  return m;
 }
 export const nn = (n) => String(n).padStart(2, '0');

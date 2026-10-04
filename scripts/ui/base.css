@@ -68,6 +68,30 @@ textarea { resize: vertical; min-height: 44px; }
 .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; z-index: 70; }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; width: min(480px, 92vw); display: flex; flex-direction: column; gap: 12px; }
 .modal h3 { margin: 0; font-size: 16px; }
+/* 되돌릴 수 없는 일 확인 (dangerDialog) */
+.modal.dz { position: relative; width: min(460px, 92vw); padding: 24px; gap: 14px; }
+.modal.dz h3 { font-size: 18px; padding-right: 28px; }
+.dz-x { position: absolute; top: 14px; right: 14px; border: 0; background: none; padding: 4px; color: var(--dim); }
+.dz-desc { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.55; }
+.dz-list { list-style: none; margin: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); border-radius: 10px; font-size: 13.5px; }
+.dz-list li { display: flex; gap: 8px; align-items: center; } .dz-list .icon { color: var(--dim); flex: none; }
+.dz-warn { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.5; color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); }
+.dz-warn .icon { flex: none; margin-top: 2px; }
+.dz-opt { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.dz-opt input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--text); }
+.dz-opt span { display: flex; flex-direction: column; gap: 2px; } .dz-opt small { color: var(--dim); font-size: 12.5px; }
+.dz-word { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.dz-word code { font-weight: 700; color: var(--text); background: var(--panel-2); padding: 1px 6px; border-radius: 5px; }
+.dz-word input { padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; font: inherit; font-size: 15px; }
+.dz-word input:focus-visible { outline: 2px solid var(--bad); outline-offset: 1px; }
+.dz-err:empty { display: none; } .dz-err { color: var(--bad); font-size: 13px; }
+.dz-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.dz-cancel, .dz-go { height: 42px; padding: 0 18px; border-radius: 10px; font-weight: 700; font-size: 14.5px; display: inline-flex; align-items: center; gap: 4px; }
+.dz-cancel { background: var(--panel); border: 1px solid var(--line); color: var(--text); }
+.dz-go { background: var(--bad); border: 1px solid var(--bad); color: #fff; }
+.dz-go:disabled { background: color-mix(in srgb, var(--bad) 35%, var(--panel)); border-color: transparent; color: #fff; cursor: not-allowed; }
+.spin { animation: spin 1.2s linear infinite; }
+@media (max-width: 700px) { .dz-foot { flex-direction: column-reverse; } .dz-cancel, .dz-go { width: 100%; justify-content: center; } }
 
 /* Lucide 아이콘 */
 .icon { display: inline-block; vertical-align: -3px; flex: none; stroke-width: 2; }

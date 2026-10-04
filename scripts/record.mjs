@@ -19,7 +19,9 @@ import {
   loadRules, assertProject, projectConf, loadContext, planErrors, scenarioErrors, planDir, recordHash, derivedPath, runPath,
   readIf, readText, writeJson, exists, sha, fileSha, now, probe, appendLog, inspectVideo, engineSettings, markBusy,
 } from './lib.mjs';
-import { assertTarget, applyContext } from './browser.mjs';
+import { assertTarget, applyContext, ignoreClosedCapture } from './browser.mjs';
+
+ignoreClosedCapture();
 
 const withTimeout = (p, ms, msg) => { let t; return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t)); };
 

@@ -58,6 +58,7 @@
   .modebadge { display: inline-flex; align-items: center; gap: 5px; background: var(--text); color: var(--accent); border: 0; border-radius: 99px; padding: 4px 10px 4px 9px; font-size: 12.5px; font-weight: 700; }
   .modebadge .icon:last-child { color: #a1a1aa; }
   .head .note { font-size: 13px; color: #71717a; }
+  .delsite:hover { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, transparent); }
   .newsite { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--dim); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; }
   .card2 { background: var(--panel); border: 1px solid #e4e4e7; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
   .ptitle { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -163,7 +164,7 @@
 <div id="root"></div>
 
 <script type="module">
-import { $, h, api, toast, sayBox, projectFromPath, icon } from '/ui/common.js';
+import { $, h, api, toast, sayBox, projectFromPath, icon, dangerDialog } from '/ui/common.js';
 
 let data = null;
 let sel = projectFromPath();
@@ -262,7 +263,8 @@ function projectView(p, pick) {
     h('button', { class: 'modebadge', title: `진행 방식 · 눌러서 ${MODES[other].name}(으)로 바꾸기`, onclick: () => switchMode(p.project, other) }, icon(m.icon, 13), m.title, icon('chevrons-up-down', 13)),
     h('span', { class: 'grow' }),
     working ? h('span', { class: 'note' }, '창을 닫아도 계속 만들어요') : null,
-    data.projects.length === 1 ? h('button', { class: 'newsite', onclick: () => { adding = true; render(); } }, icon('plus', 14), '새 사이트') : null);
+    data.projects.length === 1 ? h('button', { class: 'newsite', onclick: () => { adding = true; render(); } }, icon('plus', 14), '새 사이트') : null,
+    h('button', { class: 'newsite delsite', title: '이 사이트와 만든 기록 삭제', 'aria-label': `${p.project} 삭제`, onclick: () => askDelete(p.project) }, icon('trash-2', 14), '삭제'));
   const parts = [switcher, head, envNotice()];
   if (p.next === 'DONE') parts.push(...doneView(p));
   else parts.push(progressCard(p), scenesCard(p), checksCard(p), workingTip(p));
@@ -352,6 +354,34 @@ function doneView(p) {
   ];
 }
 
+// ---- 삭제 (진행 중이어도 멈추고 지운다) ----
+async function askDelete(project) {
+  let s;
+  try { s = await api('GET', `/api/projects/${project}/summary`); } catch (e) { return toast(e.message, true); }
+  const r = s.running;
+  const doing = r && (r.task === 'record' ? '녹화' : r.task === 'export' ? '파일 만들기' : r.agent === 'planner' ? '장면 계획' : r.agent === 'editor' ? '구간·속도 정하기' : 'AI 작업');
+  const mins = r?.since ? Math.max(1, Math.round((Date.now() - Date.parse(r.since)) / 60000)) : null;
+  dangerDialog({
+    title: `${project} 사이트를 삭제할까요?`,
+    desc: `${s.url.replace(/^https?:\/\//, '')} 등록과 이 사이트로 만든 기록이 모두 지워져요. 되돌릴 수 없어요.`,
+    items: [
+      ['images', s.posts ? `게시물 파일 ${s.posts}개 (runs/${project}/export/)` : '게시물 파일 없음'],
+      ['film', s.recordings ? `녹화본 ${s.recordings}개` : '녹화본 없음'],
+      ['file-text', '촬영 계획·편집값·검사 결과·진행 기록'],
+    ],
+    warn: r ? [`지금 진행 중이에요 (${doing}${mins ? ` · ${mins}분째` : ''}). 삭제하면 진행을 멈추고 지워요.`, r.chat ? h('div', { style: 'margin-top:4px' }, '대화창의 Claude Code에서 진행 중이라면 그 창은 직접 멈춰 주세요.') : null] : null,
+    option: s.posts ? { label: '만든 게시물 파일은 남겨 둘게요', hint: `runs/_kept/로 옮겨 두고 나머지만 지워요` } : null,
+    word: project,
+    confirmText: r ? '멈추고 삭제하기' : '삭제하기',
+    onConfirm: async (keepExport) => {
+      const out = await api('DELETE', `/api/projects/${project}`, { confirm: project, keepExport });
+      toast(`${project} 사이트를 삭제했어요${out.stopped.length ? ` (${out.stopped.join('·')} 멈춤)` : ''}${out.kept ? ` · 게시물은 ${out.kept}/에 남겼어요` : ''}`);
+      if (sel === project) { sel = null; history.replaceState(null, '', '/'); }
+      await load();
+    },
+  });
+}
+
 async function switchMode(project, mode) {
   try { await api('POST', `/api/projects/${project}/mode`, { mode }); toast(`${MODES[mode]?.name ?? mode}(으)로 바꿨어요`); await load(); }
   catch (e) { toast(e.message, true); }
@@ -367,7 +397,7 @@ $('#help').prepend(icon('book-open', 14), ' ');
 $('#recheck').addEventListener('click', async () => { await load(true); toast('다시 확인했어요'); });
 await load();
 // 3초마다 진행 상황을 새로 읽는다. 첫 화면(주소 입력)이거나 주소를 입력하는 중·새 사이트 칸을 연 동안은 화면을 다시 그리지 않는다
-setInterval(() => { if (!document.querySelector('form input:focus, details[open], .hero')) load(); }, 3000);
+setInterval(() => { if (!document.querySelector('form input:focus, details[open], .hero, .modal-back')) load(); }, 3000);   // 대화 상자가 열려 있으면 쉰다
 </script>
 </body>
 </html>
