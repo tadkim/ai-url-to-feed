@@ -26,6 +26,7 @@
 - 허용 목록(.claude/settings.json)에 없는 명령은 거절된다. 하네스 스크립트와 Read·Write·Edit·에이전트로만 진행한다.
 - `npx ai-url-to-feed retake <p> "<요청>"`은 사람이 친 다시 찍기 요청이다 (cli.mjs가 `run.mjs reject <p> plan --note`로 기록한다).
 - `npx ai-url-to-feed continue <p>`는 사람이 친 "계속 진행해"다 (STOP이면 cli.mjs가 `run.mjs unblock`을 기록하고 이어서 한다).
+- 명령줄이 띄운 세션의 `run.mjs begin`은 `HARNESS_CLI_PID`(명령줄 프로세스)를 scope 기록에 남긴다. 명령줄이 중간에 멈추면(Ctrl+C) 다음 명령줄 실행이 그 기록을 끊긴 것으로 보고 지운다 (로그 event: abort). 그래서 begin이 "이미 실행 중으로 기록됨"으로 막히지 않는다.
 
 ### 진행 방식 (projects.yaml `mode`, 기본 auto)
 

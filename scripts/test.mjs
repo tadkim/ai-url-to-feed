@@ -316,6 +316,21 @@ eq(['stuckyi.studio', 'https://a.com', 'localhost:3000', '127.0.0.1:4400/app', '
   fs.writeFileSync(process.env.HARNESS_PROJECTS, before);
 }
 
+// 명령줄이 중간에 멈추며(Ctrl+C) 남긴 에이전트 기록: 그 명령줄이 사라졌으면 실행 중으로 보지 않고 정리한다
+{
+  const scope = path.join(L.RUNS, '.harness', 'scope');
+  fs.mkdirSync(scope, { recursive: true });
+  const put = (pid) => fs.writeFileSync(path.join(scope, `${P}-P1.json`), JSON.stringify({ project: P, phase: 'P1', agent: 'planner', started_at: L.now(), owner_pid: pid, files: {} }));
+  put(process.pid);
+  eq(L.runningAgent(P)?.agent, 'planner', '끊긴 기록: 명령줄이 살아 있으면 실행 중');
+  put(2147483646);
+  eq(L.runningAgent(P), null, '끊긴 기록: 명령줄이 사라졌으면 실행 중이 아니다');
+  eq(L.clearStaleAgents(rules, P), ['P1'], '끊긴 기록: 정리한다');
+  put(undefined);
+  eq([L.runningAgent(P)?.agent, L.clearStaleAgents(rules, P)], ['planner', []], '끊긴 기록: 명령줄 표시가 없으면(대화로 진행) 그대로 둔다');
+  eq(L.clearStaleAgents(rules, P, { all: true }), ['P1'], '끊긴 기록: continue는 표시가 없는 기록도 정리한다');
+}
+
 // 편집 범위
 node('run.mjs', 'begin', P, 'P3');
 fs.writeFileSync(path.join(TMP, P, 'plan', 'plan.json'), JSON.stringify(plan));

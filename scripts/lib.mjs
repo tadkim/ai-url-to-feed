@@ -652,13 +652,21 @@ export const stagesFor = (mode) => STAGES.filter((s) => !s.modes || s.modes.incl
   ...(mode !== 'auto' && s.key === 'done' ? { who: 'me' } : {}) }));
 
 // 지금 돌고 있는 에이전트 (begin 뒤 end 전)
-export function runningAgent(project) {
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const scopeFiles = (project) => {
   const dir = path.join(RUNS, '.harness', 'scope');
-  if (!exists(dir)) return null;
-  const f = fs.readdirSync(dir).find((x) => x.startsWith(`${project}-`) && x.endsWith('.json'));
-  if (!f) return null;
-  const s = readIf(path.join(dir, f), true);
-  return s ? { agent: s.agent, phase: s.phase, started_at: s.started_at } : null;
+  return exists(dir) ? fs.readdirSync(dir).filter((x) => x.startsWith(`${project}-`) && x.endsWith('.json')).map((x) => ({ file: path.join(dir, x), s: readIf(path.join(dir, x), true) })).filter((x) => x.s) : [];
+};
+// 명령줄이 띄웠는데 그 명령줄이 이미 끝난(Ctrl+C 등) 에이전트 기록은 실행 중으로 보지 않는다
+export function runningAgent(project) {
+  const x = scopeFiles(project).find(({ s }) => !(s.owner_pid && !alive(s.owner_pid)));
+  return x ? { agent: x.s.agent, phase: x.s.phase, started_at: x.s.started_at, owner_pid: x.s.owner_pid ?? null } : null;
+}
+// 끊긴 에이전트 기록 정리. all이면 명령줄 표시가 없는 기록도 지운다 (사람이 continue로 "다른 창에서 돌지 않는다"고 한 경우)
+export function clearStaleAgents(rules, project, { all = false } = {}) {
+  const gone = scopeFiles(project).filter(({ s }) => (s.owner_pid ? !alive(s.owner_pid) : all));
+  for (const { file, s } of gone) { fs.rmSync(file, { force: true }); appendLog(rules, project, { event: 'abort', phase: s.phase, agent: s.agent, reason: s.owner_pid ? '명령줄이 중간에 멈춤' : 'continue로 정리' }); }
+  return gone.map(({ s }) => s.phase);
 }
 
 // 녹화·내보내기처럼 오래 걸리는 스크립트가 도는 동안 남기는 표시. 시작 화면이 "만드는 중"을 보여 준다

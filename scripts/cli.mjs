@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
-import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, stateDir, activityText, markCli } from './lib.mjs';
+import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, runningCli, clearStaleAgents, stateDir, activityText, markCli } from './lib.mjs';
 import { addProject } from './projects.mjs';
 import { status } from './run.mjs';
 
@@ -167,8 +167,15 @@ function drawBar(state) {
 
 // ---- Claude Code를 헤드리스로 돌리며 진행 막대를 보여 준다 ----
 async function drive(project, phrase) {
-  const busy = runningAgent(project) || runningTask(project);
-  if (busy) { say(red(`이미 다른 창에서 진행 중이에요 (${busy.agent ?? busy.task}). 그 창이 끝난 뒤 다시 실행해요.`)); return 1; }
+  const rules0 = loadRules();
+  const cleared = clearStaleAgents(rules0, project);   // 지난번 명령줄이 중간에 멈추며 남긴 기록
+  if (cleared.length) say(dim(`  지난번에 멈춘 ${cleared.join(', ')} 작업 기록을 정리하고 이어서 해요`));
+  const busy = runningCli(project) || runningAgent(project) || runningTask(project);
+  if (busy) {
+    say(red(`이미 다른 창에서 진행 중이에요 (${busy.agent ?? busy.task ?? '명령줄'}). 그 창이 끝난 뒤 다시 실행해요.`));
+    if (busy.agent && !busy.owner_pid) say(dim(`  다른 창에서 돌고 있지 않다면(직접 멈춘 실행) 이렇게 이어서 해요: npx ai-url-to-feed continue ${project}`));
+    return 1;
+  }
   if (!hasClaude()) {
     say(red('Claude Code(claude)를 찾을 수 없어요.') + ' 설치: npm install -g @anthropic-ai/claude-code → claude 한 번 실행해 로그인');
     say(`설치 뒤 다시 실행하거나, 이 폴더에서 연 Claude Code에 붙여 넣어요:  ${bold(`${project} ${phrase}`)}`);
@@ -217,7 +224,7 @@ async function drive(project, phrase) {
       fs.appendFileSync(logFile, `\n===== ${new Date().toISOString()} claude -p "${text}"\n`);
       const fd = fs.openSync(logFile, 'a');
       // 결과는 JSON 한 덩어리(사용량 포함)로 받는다. 보고 글은 기록 파일에 남긴다
-      const child = spawn('claude', ['-p', text, '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', 'pipe', fd] });
+      const child = spawn('claude', ['-p', text, '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', 'pipe', fd], env: { ...process.env, HARNESS_CLI_PID: String(process.pid) } });
       let stdout = '';
       child.stdout.on('data', (d) => { stdout += d; });
       const stop = () => { child.kill('SIGTERM'); wrapOn(); if (isTTY) process.stdout.write('\n'); say(`\n멈췄어요. 이어서 하려면 같은 명령을 다시 실행해요. 기록: ${path.relative(process.cwd(), logFile)}`); process.exit(130); };
@@ -332,6 +339,10 @@ async function retake(project, note) {
 async function resume(project, port) {
   const rules = loadRules();
   assertProject(rules, project);
+  if (runningCli(project)) { say(red('이미 다른 창의 명령줄이 진행 중이에요. 그 창이 끝난 뒤 다시 실행해요.')); return 1; }
+  // 사람이 continue를 쳤다 = 다른 창에서 돌고 있지 않다. 끊긴 에이전트 기록(예전 명령줄·대화가 남긴 것 포함)을 정리한다
+  const cleared = clearStaleAgents(rules, project, { all: true });
+  if (cleared.length) say(dim(`  멈춘 ${cleared.join(', ')} 작업 기록을 정리했어요`));
   const s = safe(rules, project);
   if (s.next === 'DONE') { printDone(project, s); return 0; }
   if (s.next === 'STOP') {

@@ -142,7 +142,8 @@ function begin(rules) {
   const file = scopeFile(project, phaseArg);
   if (exists(file)) throw new Error(`이미 실행 중으로 기록됨: ${file} — 이전 실행을 end로 닫거나 파일을 지운다`);
   appendLog(rules, project, { event: 'begin', phase: phaseArg, agent });   // 스냅샷보다 먼저 써야 자기 로그가 변경으로 잡히지 않는다
-  const snap = { project, phase: phaseArg, agent, started_at: now(), files: snapshot() };
+  // 명령줄(cli.mjs)이 띄운 실행이면 그 프로세스 번호를 남긴다. 명령줄이 중간에 멈추면(Ctrl+C) 끊긴 기록으로 알아보고 정리한다
+  const snap = { project, phase: phaseArg, agent, started_at: now(), owner_pid: Number(process.env.HARNESS_CLI_PID) || undefined, files: snapshot() };
   writeJson(file, snap);
   console.log(JSON.stringify({ begin: phaseArg, agent, writes: allowedOf(rules, snap) }, null, 2));
 }
