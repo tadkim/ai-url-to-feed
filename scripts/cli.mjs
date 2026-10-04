@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
-import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, stateDir, activitySince } from './lib.mjs';
+import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, stateDir, activityText, markCli } from './lib.mjs';
 import { addProject } from './projects.mjs';
 import { status } from './run.mjs';
 
@@ -134,14 +134,35 @@ export function barParts({ i, label, text, ms, frame = 0, done = false, width = 
   ];
 }
 export const doneLine = (label, ms) => `✓ ${pad(label, 18)} ${clock(ms)}`;
-const width = (str) => [...str].reduce((w, ch) => w + (/[ᄀ-ᇿ　-鿿가-힯＀-￯]/.test(ch) ? 2 : 1), 0);
+// 터미널에 따라 두 칸을 차지할 수 있는 글자(한글, 막대 █░, 스피너 ⠋, … · — ✓ 등)는 넉넉히 두 칸으로 센다.
+// 한 칸으로 잘못 세면 줄이 터미널 폭을 넘어 다음 줄로 넘어가고, 다시 그릴 때마다 줄이 쌓인다
+const WIDE = /[\u00b7\u1100-\u11ff\u2010-\u2027\u2190-\u21ff\u2500-\u25ff\u2700-\u27bf\u2800-\u28ff\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/;
+export const width = (str) => [...str].reduce((w, ch) => w + (WIDE.test(ch) ? 2 : 1), 0);
+const cut = (str, max) => { let w = 0, out = ''; for (const ch of str) { const c = WIDE.test(ch) ? 2 : 1; if (w + c > max) break; out += ch; w += c; } return out; };
+// 터미널 폭(cols)에 들어가는 진행 막대 조각. 좁으면 막대를 줄이고, 하는 일 → 단계 이름 순으로 줄이거나 뺀다
+export function fitBar(state, cols) {
+  const room = Math.max(10, cols - 1);
+  const total = (parts) => width(parts.map(([, t]) => t).join(''));
+  let parts = barParts({ ...state, width: cols >= 110 ? 20 : cols >= 80 ? 12 : 6 });
+  const drop = (kind) => { const i = parts.findIndex(([k]) => k === kind); if (i > 0) parts = [...parts.slice(0, i - 1), ...parts.slice(i + 1)]; };   // 앞의 구분자와 함께
+  if (total(parts) > room) {
+    const i = parts.findIndex(([k]) => k === 'text');
+    if (i > -1) {
+      const budget = room - (total(parts) - width(parts[i][1])) - 2;
+      if (budget >= 8) parts[i] = ['text', `${cut(parts[i][1], budget)}…`]; else drop('text');
+    }
+  }
+  if (total(parts) > room) drop('label');
+  if (total(parts) > room) parts = [parts.find(([k]) => k === 'spin'), ['sp', ' '], parts.find(([k]) => k === 'pct'), ['sep', ' | '], parts.find(([k]) => k === 'time')];
+  return parts;
+}
 const KIND = { spin: purple, bar: purple, rest: dim, pct: bold, sep: dim, step: dim, label: purple, text: (x) => x, time: dim, sp: (x) => x };
-function drawBar(parts) {
-  // 터미널 폭을 넘으면 하는 일(text)을 줄인다
-  const cols = process.stdout.columns || 100;
-  const over = width(parts.map(([, t]) => t).join('')) - (cols - 1);
-  const fitted = over > 0 ? parts.map(([k, t]) => (k === 'text' ? [k, [...t].slice(0, Math.max(0, [...t].length - over - 1)).join('') + '…'] : [k, t])) : parts;
-  process.stdout.write(`\r\x1b[2K${fitted.map(([k, t]) => KIND[k](t)).join('')}`);
+// 그리는 동안은 터미널 줄바꿈을 꺼서(\x1b[?7l), 폭 계산이 어긋나도 줄이 쌓이지 않게 한다. 끝나거나 멈추면 다시 켠다
+const wrapOff = () => { if (isTTY) process.stdout.write('\x1b[?7l'); };
+const wrapOn = () => { if (isTTY) process.stdout.write('\x1b[?7h'); };
+process.on('exit', wrapOn);
+function drawBar(state) {
+  process.stdout.write(`\r\x1b[2K${fitBar(state, process.stdout.columns || 80).map(([k, t]) => KIND[k](t)).join('')}`);
 }
 
 // ---- Claude Code를 헤드리스로 돌리며 진행 막대를 보여 준다 ----
@@ -153,6 +174,7 @@ async function drive(project, phrase) {
     say(`설치 뒤 다시 실행하거나, 이 폴더에서 연 Claude Code에 붙여 넣어요:  ${bold(`${project} ${phrase}`)}`);
     return 2;
   }
+  markCli(project);   // 시작 화면이 "명령줄이 진행 중"으로 보여 준다
   const logDir = path.join(stateDir(loadRules()), 'log');
   const logFile = path.join(logDir, `${project}-claude.log`);
   const eventFile = path.join(logDir, `${project}-cli.jsonl`);   // 진행 기록 (README 미리보기의 재료)
@@ -163,8 +185,8 @@ async function drive(project, phrase) {
   const cur = { i: null, label: STEPS[0], text: '', since: t0 };   // i는 첫 확인 때 정한다 (이어서 할 때 이미 끝난 단계는 다시 찍지 않는다)
   let frame = 0;
   let lastLine = '';
-  const above = (line) => { if (isTTY) process.stdout.write('\r\x1b[2K'); say(line); };   // 막대 위에 한 줄 남기기
-  const render = (done = false) => { if (isTTY) drawBar(barParts({ ...cur, ms: Date.now() - t0, frame, done })); };
+  const above = (line) => { if (isTTY) process.stdout.write('\r\x1b[2K'); wrapOn(); say(line); wrapOff(); };   // 막대 위에 한 줄 남기기 (긴 줄은 줄바꿈해서 다 보이게)
+  const render = (done = false) => { if (isTTY) drawBar({ ...cur, ms: Date.now() - t0, frame, done }); };
   const tick = () => {
     const { s, pr } = snapshot(project);
     const { i, label } = stepOf(s, cur.i ?? 0, runningAgent(project)?.agent ?? runningTask(project)?.task);
@@ -172,9 +194,9 @@ async function drive(project, phrase) {
     // 단계 사이에 Claude Code가 다음 할 일을 고르는 순간 (화면용 "Claude Code에 말해서 …" 대신)
     // 에이전트가 일하는 동안에는 도구 활동(둘러본 화면·돌려 본 시나리오·확인한 프레임 수)을 붙여 멈춘 게 아님을 보여 준다
     const ag = runningAgent(project);
-    const did = ag ? activitySince(project, ag.started_at) : {};
-    const extra = [did.explore && `화면 ${did.explore}개 둘러봄`, did.try && `시나리오 ${did.try}번 돌려 봄`, did.frames && `프레임 ${did.frames}번 확인`].filter(Boolean).join(' · ');
-    const text = pr.todo.since ? `${pr.todo.text}${extra ? ` · ${extra}` : ''}` : s.next === 'DONE' ? '' : 'Claude Code가 다음 할 일을 정하는 중';
+    const extra = ag ? activityText(project, ag.started_at) : '';
+    // 단계 이름이 이미 앞에 있으니, 에이전트가 일할 때는 짧게 "AI 작업 중 · 화면 13개 둘러봄"만 쓴다 (좁은 터미널에서도 숫자가 보이게)
+    const text = ag ? `AI 작업 중${extra ? ` · ${extra}` : ''}` : pr.todo.since ? pr.todo.text : s.next === 'DONE' ? '' : 'Claude Code가 다음 할 일을 정하는 중';
     if (i > cur.i) for (let k = cur.i; k < Math.min(i, STEPS.length); k++) above(green(doneLine(STEPS[k], Date.now() - (k === cur.i ? cur.since : Date.now()))));
     if (i !== cur.i) cur.since = Date.now();
     Object.assign(cur, { i, label, text });
@@ -187,6 +209,7 @@ async function drive(project, phrase) {
     render();
     return s;
   };
+  wrapOff();
   const spinner = isTTY ? setInterval(() => { frame++; render(); }, 120) : null;
   try {
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -197,7 +220,7 @@ async function drive(project, phrase) {
       const child = spawn('claude', ['-p', text, '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', 'pipe', fd] });
       let stdout = '';
       child.stdout.on('data', (d) => { stdout += d; });
-      const stop = () => { child.kill('SIGTERM'); if (isTTY) process.stdout.write('\n'); say(`\n멈췄어요. 이어서 하려면 같은 명령을 다시 실행해요. 기록: ${path.relative(process.cwd(), logFile)}`); process.exit(130); };
+      const stop = () => { child.kill('SIGTERM'); wrapOn(); if (isTTY) process.stdout.write('\n'); say(`\n멈췄어요. 이어서 하려면 같은 명령을 다시 실행해요. 기록: ${path.relative(process.cwd(), logFile)}`); process.exit(130); };
       process.once('SIGINT', stop);
       tick();
       const timer = setInterval(tick, 2000);
@@ -216,13 +239,14 @@ async function drive(project, phrase) {
         fs.appendFileSync(eventFile, `${JSON.stringify({ t: Date.now() - t0, i: cur.i, label: cur.label, text: cur.text, next: s.next, end: true, cost_usd: Math.round(usage.cost * 100) / 100, turns: usage.turns })}\n`);
         render(s.next === 'DONE');
         if (isTTY) process.stdout.write('\n');
+        wrapOn();
         if (s.next === 'DONE') { printDone(project, s, Date.now() - t0, usage); return 0; }
         if (s.next === 'STOP') { printStop(s, project); say(dim(`  ${usageText(usage).replace(/^ · /, '')}`)); return 1; }
         return 'approval';
       }
       above(dim(`  Claude Code가 끝났지만 아직 ${s.next} 단계예요 (종료 코드 ${code}). 이어서 진행해요 (${attempt}/3)`));
     }
-  } finally { clearInterval(spinner); }
+  } finally { clearInterval(spinner); wrapOn(); }
   if (isTTY) process.stdout.write('\n');
   say(red(`세 번 이어서 했지만 끝나지 않았어요. 기록: ${path.relative(process.cwd(), logFile)}`));
   return 1;

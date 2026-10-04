@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 import YAML from 'yaml';
 import { record } from 'walkthrough-recorder';
-import { ROOT, RUNS, loadRules, assertProject, projectConf, ff, probe, now } from './lib.mjs';
+import { ROOT, RUNS, loadRules, assertProject, projectConf, ff, probe, now, activityFile } from './lib.mjs';
 
 const source = process.argv[2];
 const rules = loadRules();
@@ -61,6 +61,11 @@ function working(kind) {
     : ['busy', `${NAME}.json`, { task: kind, pid: process.pid, started_at: started }];
   fs.mkdirSync(harness(dir), { recursive: true });
   fs.writeFileSync(harness(dir, file), JSON.stringify(body));
+  // 에이전트가 일하는 동안 도구가 남기는 활동 기록 (실제 실행에서 잰 수: 장면 계획 화면 14개·시나리오 3번, 구간·속도 프레임 4번)
+  const act = { planner: [['explore', 14], ['try', 3]], editor: [['frames', 4]] }[kind] ?? [];
+  const f = activityFile(NAME, DEMO_RUNS);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, act.map(([k, n]) => JSON.stringify({ at: now(), kind: k, n })).join('\n') + (act.length ? '\n' : ''));
 }
 fs.mkdirSync(DEMO_RUNS, { recursive: true });
 fs.writeFileSync(DEMO_PROJECTS, 'projects: {}\n');
@@ -264,5 +269,6 @@ const stills = [];
 log('stills', stills);
 
 server.kill();
+if (NAME) fs.rmSync(activityFile(NAME, DEMO_RUNS), { force: true });
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(JSON.stringify({ at: now(), hero, editor, stills }, null, 2));

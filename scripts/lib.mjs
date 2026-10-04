@@ -666,7 +666,8 @@ export function runningAgent(project) {
 const busyFile = (project) => path.join(RUNS, '.harness', 'busy', `${project}.json`);
 // 에이전트 도구(explore·try·frames)의 활동 기록 — 명령줄 진행 막대에 "화면 12개 둘러봄"처럼 보인다.
 // .cache/는 git·편집 범위 검사에서 빠진다. 기록이 실패해도 도구는 그대로 돈다
-const activityFile = (project) => path.join(ROOT, '.cache', 'activity', `${project}.jsonl`);
+// 따로 지정한 실행 폴더(HARNESS_RUNS: 테스트·미리보기 녹화)의 기록은 이름을 나눠 실제 실행 기록과 섞이지 않게 한다
+export const activityFile = (project, runs = process.env.HARNESS_RUNS ? RUNS : null) => path.join(ROOT, '.cache', 'activity', `${project}${runs ? `-${crypto.createHash('sha1').update(path.resolve(runs)).digest('hex').slice(0, 8)}` : ''}.jsonl`);
 export function activity(project, kind, n = 1) {
   try { fs.mkdirSync(path.dirname(activityFile(project)), { recursive: true }); fs.appendFileSync(activityFile(project), `${JSON.stringify({ at: now(), kind, n })}\n`); } catch { /* 표시용 */ }
 }
@@ -685,6 +686,31 @@ export function markBusy(project, task) {
   fs.writeFileSync(f, JSON.stringify({ task, pid: process.pid, started_at: now() }));
   process.on('exit', () => { try { if (JSON.parse(fs.readFileSync(f, 'utf8')).pid === process.pid) fs.rmSync(f); } catch { /* 이미 없다 */ } });
 }
+// 명령줄(npx ai-url-to-feed)이 Claude Code를 띄워 진행하는 중이라는 표시 — 시작 화면이 "Claude Code에 말하세요" 대신 "진행 중"을 보여 준다
+const cliFile = (project) => path.join(RUNS, '.harness', 'cli', `${project}.json`);
+export function markCli(project) {
+  const f = cliFile(project);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify({ pid: process.pid, started_at: now() }));
+  process.on('exit', () => { try { if (JSON.parse(fs.readFileSync(f, 'utf8')).pid === process.pid) fs.rmSync(f); } catch { /* 이미 없다 */ } });
+}
+export function runningCli(project) {
+  const s = readIf(cliFile(project), true);
+  if (!s) return null;
+  try { process.kill(s.pid, 0); } catch { return null; }
+  return s;
+}
+// 마지막 명령줄 실행의 Claude Code 사용량 (진행 기록의 끝 줄)
+export function lastUsage(rules, project) {
+  const lines = (readIf(path.join(stateDir(rules), 'log', `${project}-cli.jsonl`)) ?? '').trim().split('\n').reverse();
+  for (const l of lines) { try { const e = JSON.parse(l); if (e.end && e.cost_usd != null) return { cost_usd: e.cost_usd, turns: e.turns, seconds: Math.round(e.t / 1000) }; } catch { /* 깨진 줄 */ } }
+  return null;
+}
+export const activityText = (project, since) => {
+  const did = activitySince(project, since);
+  return [did.explore && `화면 ${did.explore}개 둘러봄`, did.try && `시나리오 ${did.try}번 돌려 봄`, did.frames && `프레임 ${did.frames}번 확인`].filter(Boolean).join(' · ');
+};
+
 export function runningTask(project) {
   const s = readIf(busyFile(project), true);
   if (!s) return null;
@@ -752,20 +778,22 @@ export function progress(rules, project, st, next, env = {}) {
   if (mode === 'review' && current === last && next.next === 'APPROVAL_FINAL') S.tune.state = S.tune.done ? 'done' : 'optional';
   const agent = runningAgent(project);
   const task = agent ? null : runningTask(project);
+  const cli = runningCli(project);
   const started = !!(ctx.plan || st.done.P1 || agent || task);
   let todo;
   if (current === 1 && (tools.length || env.chromium === false)) todo = { who: 'me', text: '실행 환경을 준비해요', detail: tools.join(' / ') || 'npx playwright install chromium', link: 'docs/troubleshooting.md' };
   else if (next.next === 'STOP') todo = { who: 'me', text: '멈췄어요 — 이유를 확인하고 고친 뒤 이어서 진행해요', detail: next.reason, say: `${project} 계속 진행해`, link: 'docs/troubleshooting.md' };
-  else if (agent) todo = { who: 'ai', text: `AI가 작업 중이에요 (${agent.agent === 'planner' ? '장면 계획·녹화 준비' : '구간·속도 정하기'})`, since: agent.started_at, detail: '끝나면 이 화면에 다음 할 일이 나와요. 그동안 Claude Code 창을 닫지 않아요.' };
+  else if (agent) { const did = activityText(project, agent.started_at); todo = { who: 'ai', text: `AI가 작업 중이에요 (${agent.agent === 'planner' ? '장면 계획·녹화 준비' : '구간·속도 정하기'})`, activity: did || null, since: agent.started_at, detail: cli ? '터미널의 명령줄이 진행하고 있어요. 끝나면 이 화면에 다음 할 일이 나와요.' : '끝나면 이 화면에 다음 할 일이 나와요. 그동안 Claude Code 창을 닫지 않아요.' }; }
   else if (task) todo = { who: 'ai', text: task.task === 'record' ? '녹화하는 중이에요' : '영상·이미지 파일을 만드는 중이에요', since: task.started_at, detail: task.task === 'record' ? '녹화본마다 1분 안팎 걸려요. 끝나면 이 화면에 다음 할 일이 나와요.' : '1080×1440으로 합성하고 자동 검사를 해요. 끝나면 이 화면에 다음 할 일이 나와요.' };
   else if (next.next === 'APPROVAL_PLAN') todo = { who: 'me', text: '녹화의 주요 장면을 훑어보고 승인해요', detail: '영상을 끝까지 보지 않아도 돼요. 에셋 빼기·순서·설명은 그 화면에서 바로 바꾸고, 다시 찍을 부분은 장면에 메모해요.', page: 'approve/plan' };
   else if (next.next === 'APPROVAL_FINAL' && mode === 'edit') todo = { who: 'me', text: '자동으로 만든 파일을 내 취향대로 다듬고 승인해요', detail: '편집 화면에서 구간·속도·배경색을 바꾸고 내보내기를 누른 뒤, 완성본 확인에서 승인해요. 그대로 써도 되면 바로 승인해도 돼요.', page: 'approve/final', edit: true, editFirst: true };
   else if (next.next === 'APPROVAL_FINAL') todo = { who: 'me', text: '완성본을 보고 승인하거나 고칠 점을 적어요. 직접 다듬어도 돼요', page: 'approve/final', edit: true };
   else if (next.next === 'DONE') todo = { who: 'done', text: '완성됐어요', detail: `runs/${project}/export/`, mode };
+  else if (cli) todo = { who: 'ai', text: 'Claude Code가 다음 할 일을 정하는 중이에요', since: cli.started_at, detail: '터미널의 명령줄(npx ai-url-to-feed)이 진행하고 있어요. 이 화면은 지켜보기만 하면 돼요.' };
   else if (!started) todo = { who: 'me', text: 'Claude Code에 말해서 시작해요', say: `${project} 하네스 시작해줘` };
-  else todo = { who: 'ai', text: 'AI 차례예요. Claude Code에 말하면 이어서 진행해요', say: `${project} 이어서 해줘`, detail: next.reason };
+  else todo = { who: 'ai', text: 'AI 차례예요. 진행 중이 아니면 이 문장을 Claude Code에 붙여 넣어요', say: `${project} 이어서 해줘`, detail: next.reason };
   const doneCount = stages.filter((s) => s.state === 'done').length;
-  return { project, url: conf.url, title: conf.title ?? null, mode, current, stages, todo, next: next.next, reason: next.reason, done: doneCount, total: stages.length };
+  return { project, url: conf.url, title: conf.title ?? null, mode, current, stages, todo, next: next.next, reason: next.reason, done: doneCount, total: stages.length, cli: !!cli, usage: next.next === 'DONE' ? lastUsage(rules, project) : null };
 }
 
 // https://를 빼고 넣어도 된다. 내 컴퓨터(localhost, 127.0.0.1, 192.168.x.x)는 http://, 나머지는 https://를 붙인다

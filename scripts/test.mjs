@@ -278,7 +278,8 @@ eq(['stuckyi.studio', 'https://a.com', 'localhost:3000', '127.0.0.1:4400/app', '
     const got = L.activitySince('act-test', since);
     eq([got.explore, got.try], [6, 3], '활동 기록: 에이전트 시작 뒤 둘러본 화면·돌려 본 시나리오 수');
     eq(L.activitySince('act-test', new Date(Date.now() + 60000).toISOString()), {}, '활동 기록: 시작 전 기록은 세지 않는다');
-    fs.rmSync(path.join(L.ROOT, '.cache', 'activity', 'act-test.jsonl'), { force: true });
+    ok(L.activityFile('act-test').includes('act-test-'), '활동 기록: 따로 지정한 실행 폴더는 실제 기록과 파일을 나눈다');
+    fs.rmSync(L.activityFile('act-test'), { force: true });
   }
   eq([C.stepOf({ next: 'P1' }).i, C.stepOf({ next: 'P2' }).i, C.stepOf({ next: 'P3' }).i, C.stepOf({ next: 'P4', todo: 'export' }).i, C.stepOf({ next: 'P4', todo: 'judge' }).i, C.stepOf({ next: 'DONE' }).label], [0, 1, 2, 3, 4, '완성'], '진행 막대: status → 단계');
   eq(C.stepOf({ next: 'P4', todo: 'export' }, 2, 'editor').label, '구간·속도 정하기', '진행 막대: editor가 아직 돌면 status가 앞서가도 그 단계');
@@ -286,6 +287,12 @@ eq(['stuckyi.studio', 'https://a.com', 'localhost:3000', '127.0.0.1:4400/app', '
   const bar = C.barParts({ i: 2, label: '구간·속도 정하기', text: '작업 중', ms: 61000 }).map(([, t]) => t).join('');
   ok(/████████░{12}  40% \| 3\/5 구간·속도 정하기 \| 작업 중 \| 01:01$/.test(bar), '진행 막대 모양', bar);
   ok(/^✓ █{20} 100% \| 5\/5 완성/.test(C.barParts({ i: 5, label: '완성', ms: 0, done: true }).map(([, t]) => t).join('')), '진행 막대: 완성은 100%');
+  for (const cols of [140, 100, 80, 60, 45, 30]) {
+    const st = { i: 0, label: '장면 계획', text: 'AI가 작업 중이에요 (장면 계획·녹화 준비) · 화면 13개 둘러봄', ms: 97000, frame: 3 };
+    const line = C.fitBar(st, cols).map(([, t]) => t).join('');
+    ok(C.width(line) <= cols - 1 && /01:37$/.test(line), `진행 막대: 터미널 폭 ${cols}에서 한 줄에 들어가고 시간이 보인다`, `${C.width(line)} · ${line}`);
+  }
+  eq(C.width('█░⠋한'), 8, '진행 막대: 막대·스피너·한글은 두 칸으로 센다');
   let threw = false; try { C.parseArgs(['a.com', '--edit', '--auto']); } catch { threw = true; }
   ok(threw, '명령줄: --edit와 --auto는 같이 못 쓴다');
   threw = false; try { C.parseArgs(['a.com', '--bg']); } catch { threw = true; }
