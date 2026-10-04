@@ -1,4 +1,4 @@
-# 푸시·PR마다 하네스 자체 검사(npm test)를 macOS와 Linux에서 돌린다.
+# 푸시·PR마다 하네스 자체 검사(npm test)를 macOS·Linux·Windows에서 돌린다.
 # 실제 사이트를 열지 않는다 (가짜 녹화본으로 계획 → 편집 → 내보내기 → 판정 흐름을 본다).
 name: test
 on:
@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -24,6 +24,9 @@ jobs:
       - name: ffmpeg·한글 글꼴 (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-cjk
+      - name: ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
       - run: npm ci
         env:
           HARNESS_SKIP_BROWSER: 1   # 아래에서 시스템 의존성과 함께 설치한다
