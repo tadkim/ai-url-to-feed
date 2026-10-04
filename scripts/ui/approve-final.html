@@ -7,26 +7,29 @@
 <link rel="stylesheet" href="/ui/base.css">
 <script src="/ui/lucide.js"></script>
 <style>
-  main { max-width: 1240px; margin: 0 auto; padding: 16px 22px 24px; display: flex; flex-direction: column; gap: 14px; }
-  .tabs { display: inline-flex; background: var(--panel); border-radius: 10px; padding: 3px; gap: 2px; }
-  .tabs button { border: 0; background: none; border-radius: 8px; color: var(--dim); }
-  .tabs button.on { background: var(--panel-2); color: var(--text); font-weight: 600; }
-  .note { background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+  main { max-width: 1440px; margin: 0 auto; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .tabs { display: inline-flex; border: 1px solid #3f3f46; border-radius: 6px; padding: 2px; gap: 2px; }
+  .tabs button { border: 0; background: none; border-radius: 4px; color: var(--bar-dim); padding: 3px 10px; font-size: 12px; }
+  .tabs button.on { background: var(--bar-text); color: var(--bar); font-weight: 600; }
+  .note { background: color-mix(in srgb, var(--warn) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
   .note b { color: var(--warn); }
-  .asset { display: grid; grid-template-columns: 220px repeat(var(--cols), minmax(0, 300px)); gap: 18px; align-items: start; }
+  .agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 540px), 1fr)); gap: 8px; }
+  .asset { display: grid; grid-template-columns: minmax(0, 1fr) repeat(var(--cols), 170px); gap: 10px; align-items: start; padding: 10px 12px; }
+  .asset.card { border-radius: 8px; }
   @media (max-width: 900px) { .asset { grid-template-columns: 1fr; } }
   .asset .info { display: flex; flex-direction: column; gap: 8px; }
-  .asset .num { font-size: 22px; font-weight: 700; }
-  .asset .plan { background: var(--ui-bg); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .asset .info { gap: 6px; }
+  .asset .num { font: 700 16px ui-monospace, Menlo, monospace; }
+  .asset .plan { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12.5px; }
   .asset .plan .k { color: var(--dim); font-size: 11px; display: block; margin-bottom: 2px; }
   .asset figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
   .asset figcaption { font-size: 12px; color: var(--dim); display: flex; gap: 8px; }
   .asset figure.now figcaption b { color: var(--accent-strong); }
   .asset .changes { font-size: 12px; color: var(--warn); display: flex; flex-direction: column; gap: 2px; }
-  .seen { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); cursor: pointer; }
-  .seen input { accent-color: var(--ok); }
+  .seen { display: flex; gap: 4px; align-items: center; font-size: 12px; color: var(--dim); }
+  .seen.on { color: var(--ok); }
   .feed { display: grid; grid-template-columns: 56px minmax(0, 420px) 56px; justify-content: center; align-items: center; gap: 12px; }
-  .feed .post { background: #fff; border-radius: 10px; overflow: hidden; color: #222; }
+  .feed .post { background: #fff; border-radius: 8px; overflow: hidden; color: #222; border: 1px solid var(--line); }
   .feed .post .ph { display: flex; gap: 8px; align-items: center; padding: 8px 12px; font-size: 13px; }
   .feed .post .ph i { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg,#f59e0b,#ec4899); }
   .feed .post .dots { display: flex; justify-content: center; gap: 4px; padding: 8px; }
@@ -34,11 +37,12 @@
   .feed .post .dots span.on { background: #3b82f6; }
   .feed > button { height: 56px; border-radius: 50%; display: grid; place-items: center; }
   .gate { display: flex; flex-wrap: wrap; gap: 6px; }
-  .actionbar .reject { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .actionbar .reject { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .actionbar textarea { min-height: 34px; height: 34px; padding: 6px 8px; }
   .chips { display: flex; gap: 4px; flex-wrap: wrap; }
-  .chips button { padding: 2px 10px; border-radius: 99px; font-size: 12px; }
+  .chips button { padding: 1px 8px; border-radius: 4px; font-size: 11.5px; font-family: ui-monospace, Menlo, monospace; }
   .chips button.on { background: var(--warn); color: #fff; border-color: var(--warn); }
-  .approve { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .approve { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
 </style>
 </head>
 <body>
@@ -67,7 +71,11 @@ const tagged = new Set();
 const media = (src, type, attrs = {}) => !src ? h('div', { class: 'media-3x4 empty', style: 'display:grid;place-items:center' }, '파일 없음')
   : type === 'video' ? h('video', { class: 'media-3x4', src, muted: true, loop: true, playsinline: true, autoplay: true, ...attrs }) : h('img', { class: 'media-3x4', src, alt: '', ...attrs });
 
-function markSeen(n) { if (!seen.has(n)) { seen.add(n); renderBar(); document.querySelectorAll(`[data-seen="${n}"]`).forEach((c) => { c.checked = true; }); } }
+function markSeen(n) {
+  if (seen.has(n)) return;
+  seen.add(n); renderBar();
+  document.querySelectorAll(`[data-seen="${n}"]`).forEach((c) => { c.classList.add('on'); c.replaceChildren(icon('eye', 13), ' 봤어요'); });
+}
 
 function sideView() {
   const prev = !!D.previous;
@@ -81,7 +89,7 @@ function sideView() {
         h('span', { class: 'hint' }, a.type === 'video' ? `영상 · ${a.seconds}초` : `이미지 · 화면 ${{ single: 1, double: 2, triple: 3 }[a.layout] ?? '?'}개`),
         h('div', { class: 'plan' }, h('span', { class: 'k' }, '계획한 장면'), a.planned?.scene || a.scene || '—', mismatch ? h('div', { class: 'warn-text', style: 'margin-top:4px;font-size:12px' }, `계획은 ${a.planned.type}·${a.planned.layout}`) : null),
         ch.length ? h('div', { class: 'changes' }, h('b', {}, '이전과 달라진 점'), ch.map((c) => h('span', {}, `· ${c}`))) : null,
-        h('label', { class: 'seen' }, h('input', { type: 'checkbox', 'data-seen': a.n, checked: seen.has(a.n), onchange: (e) => { if (e.target.checked) seen.add(a.n); else seen.delete(a.n); renderBar(); } }), '확인했어요')),
+        h('span', { class: `seen${seen.has(a.n) ? ' on' : ''}`, 'data-seen': a.n }, icon('eye', 13), seen.has(a.n) ? ' 봤어요' : ' 아직 안 봤어요')),
       prev && h('figure', {}, media(a.previous, a.type), h('figcaption', {}, h('span', {}, '이전 (거절됨)'))),
       h('figure', { class: 'now' }, media(a.file, a.type), h('figcaption', {}, h('b', {}, '지금'), ch.length ? h('span', { class: 'warn-text' }, '바뀜') : prev ? h('span', {}, '그대로') : null)));
     io.observe(row);
@@ -113,12 +121,13 @@ function header() {
     D.style && h('span', { class: 'hint', style: 'display:flex;gap:6px;align-items:center' }, '배경', h('span', { style: `width:14px;height:14px;border-radius:4px;background:${D.style.bg};border:1px solid var(--line)` }), D.style.bg)));
   if (D.previous) out.push(h('div', { class: 'note' }, h('b', {}, '지난번 요청'), ` "${D.previous.note ?? '(요청 없음)'}" 이후 다시 만든 결과예요.`,
     D.changes.style.length ? h('div', { style: 'margin-top:4px' }, '전체 스타일: ', D.changes.style.map((s) => `${s.key} ${s.from} → ${s.to}`).join(', ')) : null));
-  if (D.status.next !== 'APPROVAL_FINAL') out.push(h('div', { class: 'note' }, h('b', {}, '지금은 승인할 수 없어요'), ' — ', D.status.next === 'DONE' ? '이미 승인한 완성본이에요.' : D.status.reason));
+  if (D.mode === 'auto') out.push(h('div', { class: 'note' }, h('b', {}, '자동 생성'), D.status.next === 'DONE' ? ' — 승인 없이 완성된 결과예요. 다듬고 싶으면 ' : ' — 아직 만드는 중이에요. ', h('button', { style: 'padding:1px 8px;font-size:12px', onclick: async () => { try { await api('POST', `/api/projects/${P}/mode`, { mode: 'edit' }); toast('편집 모드로 바꿨어요'); location.href = `/p/${P}/edit/`; } catch (e) { toast(e.message, true); } } }, '편집 모드로 바꾸기')));
+  else if (D.status.next !== 'APPROVAL_FINAL') out.push(h('div', { class: 'note' }, h('b', {}, '지금은 승인할 수 없어요'), ' — ', D.status.next === 'DONE' ? '이미 승인한 완성본이에요.' : D.status.reason));
   return out;
 }
 
 function render() {
-  $('#main').replaceChildren(...header(), ...(tab === 'side' ? sideView() : feedView()));
+  $('#main').replaceChildren(...header(), ...(tab === 'side' ? [h('div', { class: 'agrid' }, sideView())] : feedView()));
   renderBar();
 }
 
@@ -141,12 +150,14 @@ function buildBar() {
 }
 function renderBar() {
   if (!bar.approve) buildBar();
+  $('#bar').hidden = D.mode === 'auto';   // 자동 생성은 승인하지 않는다
   const can = D.status.next === 'APPROVAL_FINAL';
   const fails = D.gate ? D.gate.results.filter((r) => !r.pass).length : 1;
   const all = seen.size >= D.assets.length;
   bar.note.disabled = !can; bar.reject.disabled = !can;
-  bar.approve.disabled = !can || !all || fails > 0;
-  bar.count.textContent = `확인 ${Math.min(seen.size, D.assets.length)}/${D.assets.length}${!can ? '' : fails > 0 ? ' · 검사 실패가 있으면 승인할 수 없어요' : !all ? ' · 모두 확인하면 승인할 수 있어요' : ''}`;
+  // 다 봤는지는 알려 주기만 하고 막지 않는다. 자동 검사 실패만 막는다
+  bar.approve.disabled = !can || fails > 0;
+  bar.count.textContent = `본 에셋 ${Math.min(seen.size, D.assets.length)}/${D.assets.length}${!can ? '' : fails > 0 ? ' · 검사 실패가 있으면 승인할 수 없어요' : !all ? ' · 넘겨 보기로 빠르게 훑어볼 수 있어요' : ''}`;
   if (bar.chips.childElementCount !== D.assets.length + 1) {
     bar.chips.replaceChildren(h('span', { class: 'hint' }, '고칠 에셋'), ...D.assets.map((a) => h('button', { class: tagged.has(a.n) ? 'on' : '', onclick: (e) => { tagged.has(a.n) ? tagged.delete(a.n) : tagged.add(a.n); e.target.classList.toggle('on'); } }, nn(a.n))));
   }

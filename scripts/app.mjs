@@ -11,7 +11,8 @@ import { spawn } from 'node:child_process';
 import YAML from 'yaml';
 import {
   ROOT, PROJECTS_FILE, loadRules, projectConf, loadContext, readIf, readText, exists, derivedPath, runPath, planHash, finalHash,
-  latestHistory, progress, runningAgent, toolProblems, isHuman, assetFile, now, loadState,
+  latestHistory, progress, runningAgent, toolProblems, isHuman, assetFile, now, loadState, withScheme,
+  applyPlanAssets, planErrors, writeJson, phasePath, appendLog, ff,
 } from './lib.mjs';
 import { send, readBody, editorRoutes, serveRunFile, serveUi, safeStatus, listen, TYPES } from './server.mjs';
 
@@ -53,9 +54,9 @@ function slug(u) {
   const base = ['localhost', '127.0.0.1'].includes(host) ? `local-${u.port || 80}` : host.split('.').slice(0, -1).join('-') || host;
   return base.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'site';
 }
-async function addProject(raw) {
+async function addProject(raw, mode) {
   let u;
-  try { u = new URL(String(raw).trim()); } catch { throw new Error('주소 형식이 아니에요 (https://로 시작해요)'); }
+  try { u = new URL(withScheme(raw)); } catch { throw new Error('주소 형식이 아니에요 (예: stuckyi.studio, localhost:3000)'); }
   if (!/^https?:$/.test(u.protocol)) throw new Error('http:// 또는 https:// 주소만 쓸 수 있어요');
   const url = `${u.origin}${u.pathname}`.replace(/\/+$/, '');
   const local = ['localhost', '127.0.0.1'].includes(u.hostname);
@@ -73,24 +74,81 @@ async function addProject(raw) {
     if (!s.ok) throw new Error(s.error);
     Object.assign(entry, { title: s.title, target: 'local' });
   }
+  if (mode && mode !== (loadRules().default_mode ?? 'auto')) entry.mode = mode;   // 기본(auto)이면 적지 않는다
   doc.setIn(['projects', name], doc.createNode(entry));
   doc.get('projects').flow = false;   // 빈 목록 "{}"에서 시작해도 사람이 읽기 쉬운 블록 형식으로 쓴다
   fs.writeFileSync(PROJECTS_FILE, String(doc));
   return { name, existed: false };
 }
 
+// 진행 방식 바꾸기 (projects.yaml의 mode). AI가 일하는 중에는 바꾸지 않는다
+function setMode(project, mode) {
+  const rules = loadRules();
+  if (!(rules.modes ?? []).includes(mode)) throw Object.assign(new Error(`mode는 ${(rules.modes ?? []).join(' | ')} 중 하나`), { code: 400 });
+  if (runningAgent(project)) throw Object.assign(new Error('AI가 작업 중이라 지금은 바꿀 수 없어요'), { code: 409 });
+  const doc = YAML.parseDocument(readText(PROJECTS_FILE));
+  if (mode === (rules.default_mode ?? 'auto')) doc.deleteIn(['projects', project, 'mode']); else doc.setIn(['projects', project, 'mode'], mode);
+  fs.writeFileSync(PROJECTS_FILE, String(doc));
+}
+
 // ---- 승인 비교 화면 데이터 ----
 const fileUrl = (project, rel) => `/p/${project}/files/${rel}`;
 function planCompare(rules, project) {
   const ctx = loadContext(rules, project);
+  const conf = projectConf(rules, project);
   const recs = (raw, prefix) => (raw?.recordings ?? []).filter((r) => !r.error).map((r) => ({ name: r.name, duration: r.duration, writes_blocked: r.writes_blocked, writes_seen: r.writes_seen, video: fileUrl(project, `${prefix}raw/${r.file}`), sheet: fileUrl(project, `${prefix}raw/${r.sheet}`), sheet_every: r.sheet_every }));
   const prev = latestHistory(project, 'plan');
   const st = loadState(rules, project);
+  const status = safeStatus(rules, project);
+  const recordings = recs(ctx.raw, '').map((r) => {
+    const p = ctx.plan?.recordings?.find((x) => x.name === r.name);
+    return { ...r, note: p?.note ?? '', ...highlightsOf(ctx, r, p) };
+  });
   return {
-    project, hash: planHash(rules, project), status: safeStatus(rules, project),
-    plan: ctx.plan, recordings: recs(ctx.raw, ''),
+    project, hash: planHash(rules, project), status,
+    mode: conf.mode,
+    editable: status.next === 'APPROVAL_PLAN' && !runningAgent(project),
+    // 다시 찍기 요청: review 모드는 녹화 확인 단계에서, edit·auto 모드는 완성된 뒤에도 할 수 있다
+    retake: !runningAgent(project) && ['APPROVAL_PLAN', 'APPROVAL_FINAL', 'DONE'].includes(status.next),
+    limits: { count: conf.count, maxVideoSeconds: conf.maxVideoSeconds },
+    plan: ctx.plan, recordings,
     previous: prev ? { at: prev.at, note: st.plan_notes?.at(-1)?.note ?? null, plan: readIf(path.join(prev.dir, 'plan/plan.json'), true), recordings: recs(readIf(path.join(prev.dir, 'raw/manifest.json'), true), `${prev.rel}/`) } : null,
   };
+}
+// 주요 장면: planner가 쓴 highlights(무엇을 어떻게 찍었는지). 없으면 에셋 cue와 처음·끝으로 고른다
+function highlightsOf(ctx, r, p) {
+  const clamp = (t) => Math.max(0, Math.min(Number(t), r.duration - 0.1));
+  if (p?.highlights?.length) return { highlights: p.highlights.map((x) => ({ t: clamp(x.t), text: x.text })), highlights_auto: false };
+  const pts = [{ t: 0.5, text: '녹화 첫 화면' },
+    ...(ctx.plan?.assets ?? []).filter((a) => a.sources?.includes(r.name) && a.cue != null).map((a) => ({ t: clamp(a.cue), text: `${String(a.n).padStart(2, '0')} ${a.scene}` })),
+    { t: clamp(r.duration - 0.3), text: '녹화 끝 장면' }].sort((a, b) => a.t - b.t);
+  const out = [];
+  for (const x of pts) if (!out.length || x.t - out.at(-1).t > 0.8) out.push(x);
+  return { highlights: out.slice(0, 6), highlights_auto: true };
+}
+// 녹화본의 한 순간을 작은 이미지로 (.cache/thumbs/에 남겨 다시 쓴다)
+function thumb(rules, project, name, t) {
+  const r = loadContext(rules, project).raw?.recordings?.find((x) => x.name === name && !x.error);
+  if (!r) return null;
+  const at = Math.max(0, Math.min(Number(t) || 0, r.duration - 0.05));
+  const out = path.join(ROOT, '.cache', 'thumbs', project, `${name}-${String(r.sha ?? r.recorded_at ?? '').slice(0, 10).replace(/[^a-z0-9]/gi, '')}-${at.toFixed(1)}.jpg`);
+  if (!exists(out)) {
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    ff('ffmpeg', ['-v', 'error', '-y', '-ss', at.toFixed(2), '-i', runPath(project, `raw/${r.file}`), '-frames:v', '1', '-vf', 'scale=300:-2', '-q:v', '4', out]);
+  }
+  return out;
+}
+// 녹화 확인 화면에서 사람이 고친 에셋 목록 저장 (다시 찍지 않는 변경만)
+function savePlanAssets(rules, project, items) {
+  if (runningAgent(project)) throw Object.assign(new Error('AI가 작업 중이라 지금은 바꿀 수 없어요'), { code: 409 });
+  if (safeStatus(rules, project).next !== 'APPROVAL_PLAN') throw Object.assign(new Error('녹화 확인 단계에서만 에셋을 바꿀 수 있어요'), { code: 409 });
+  const ctx = loadContext(rules, project);
+  const plan = applyPlanAssets(ctx.plan, items);
+  const errs = planErrors({ ...ctx, plan }).filter((e) => !/시나리오|scenario/.test(e));
+  if (errs.length) throw Object.assign(new Error(errs[0]), { code: 400 });
+  writeJson(phasePath(rules, project, 'P1'), plan);
+  appendLog(rules, project, { event: 'plan_edit', by: 'human', assets: plan.assets.length });
+  return planCompare(rules, project);
 }
 function diffEdits(prevEdits, curEdits) {
   const out = {};
@@ -122,7 +180,7 @@ function finalCompare(rules, project) {
   const planned = (n) => ctx.plan?.assets?.find((x) => x.n === n);
   const exp = ctx.exp;
   return {
-    project, hash: finalHash(rules, project), status: safeStatus(rules, project),
+    project, hash: finalHash(rules, project), status: safeStatus(rules, project), mode: projectConf(rules, project).mode,
     canvas: rules.assets.canvas, style: ctx.edits?.style ?? null,
     gate: p4 ? { pass: p4.pass, results: p4.results.filter((r) => !isHuman(rules, r.gate)) } : null,
     assets: (ctx.edits?.assets ?? []).map((a) => {
@@ -148,7 +206,8 @@ async function decide(rules, project, what, action, body) {
   if (agent) throw Object.assign(new Error('AI가 작업 중이라 지금은 승인·거절할 수 없어요. 끝난 뒤 다시 해 주세요'), { code: 409 });
   const want = what === 'plan' ? 'APPROVAL_PLAN' : 'APPROVAL_FINAL';
   const s = safeStatus(rules, project);
-  if (s.next !== want) throw Object.assign(new Error(`지금은 ${what === 'plan' ? '녹화 확인' : '완성본'} 승인 단계가 아니에요 (${s.reason})`), { code: 409 });
+  const retake = what === 'plan' && action === 'reject' && ['APPROVAL_FINAL', 'DONE'].includes(s.next);   // 완성본을 본 뒤 다시 찍기 요청
+  if (s.next !== want && !retake) throw Object.assign(new Error(`지금은 ${what === 'plan' ? '녹화 확인' : '완성본'} 승인 단계가 아니에요 (${s.reason})`), { code: 409 });
   if (action === 'approve') {
     const hash = what === 'plan' ? planHash(rules, project) : finalHash(rules, project);
     if (body.hash !== hash) throw Object.assign(new Error('화면을 연 뒤 내용이 바뀌었어요. 새로고침해서 다시 확인해 주세요'), { code: 409 });
@@ -186,7 +245,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/projects') {
       const body = JSON.parse((await readBody(req)) || '{}');
       try {
-        const r = await addProject(body.url);
+        const r = await addProject(body.url, ['auto', 'edit', 'review'].includes(body.mode) ? body.mode : undefined);
         const fresh = loadRules();
         await checkSite(projectConf(fresh, r.name));
         return send(res, 200, { ...r, progress: progressOf(fresh, r.name) });
@@ -198,7 +257,21 @@ const server = http.createServer(async (req, res) => {
       if (!rules.projects[project]) return send(res, 404, { error: `등록되지 않은 프로젝트: ${project}` });
       if (kind === 'api/projects') {
         if (req.method === 'GET' && rest === 'progress') return send(res, 200, progressOf(rules, project));
+        if (req.method === 'POST' && rest === 'mode') {
+          try { setMode(project, JSON.parse((await readBody(req)) || '{}').mode); return send(res, 200, progressOf(loadRules(), project)); }
+          catch (e) { return send(res, e.code ?? 400, { error: e.message }); }
+        }
         if (req.method === 'GET' && rest === 'compare/plan') return send(res, 200, planCompare(rules, project));
+        if (req.method === 'PUT' && rest === 'plan/assets') {
+          try { return send(res, 200, savePlanAssets(rules, project, JSON.parse((await readBody(req)) || '{}').assets)); }
+          catch (e) { return send(res, e.code ?? 400, { error: e.message }); }
+        }
+        if (req.method === 'GET' && rest === 'thumb') {
+          const f = thumb(rules, project, url.searchParams.get('rec'), url.searchParams.get('t'));
+          if (!f) return send(res, 404, { error: '녹화 없음' });
+          res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'max-age=3600' });
+          return res.end(fs.readFileSync(f));
+        }
         if (req.method === 'GET' && rest === 'compare/final') return send(res, 200, finalCompare(rules, project));
         const d = /^(approve|reject)\/(plan|final)$/.exec(rest);
         if (req.method === 'POST' && d) {

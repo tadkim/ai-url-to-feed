@@ -26,6 +26,7 @@
 
 ## 사람
 
+- 진행 방식(projects.yaml `mode`): auto는 사람 승인 없이 자동 검사만으로 완성, edit는 완성본만, review는 둘 다 사람이 승인한다. 어떤 승인을 건너뛸지는 run.mjs status가 정한다.
 - 승인은 사람만 한다. "<project> 촬영 계획 승인" → `run.mjs approve <project> plan`, "<project> 완성본 승인" → `run.mjs approve <project> final`. 시작 화면의 승인·거절 버튼도 같은 명령을 실행한다 (화면을 연 뒤 내용이 바뀌었으면 승인하지 않는다).
 - 거절하면 run.mjs가 직전 결과를 `runs/<p>/history/<plan|final>/`에 남긴다 (최근 3개). 승인 화면이 이전과 지금을 나란히 보여 준다.
 - 승인 1은 plan.json + 시나리오 + 녹화본 해시, 승인 2는 export/ 파일 + edits.json 해시를 남긴다. 이후 내용이 바뀌면 예전 승인은 무효다.

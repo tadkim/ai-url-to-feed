@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // README의 미리보기 GIF를 실제 화면(npm start)으로 녹화한다. 끝까지 진행한(export/가 있는) 프로젝트 1개를 재료로 쓴다.
 // 사용: node scripts/make-demo.mjs <project>
-// 출력: docs/assets/hero.gif|mp4   — URL 입력 → AI 녹화 중 → 녹화 확인·승인 → AI 파일 만드는 중 → 완성본 넘겨 보기·승인 → 완성
+// 출력: docs/assets/hero.gif|mp4   — 자동 생성: URL 입력 → AI 녹화 중 → AI 파일 만드는 중 → 승인 없이 완성 → 결과 넘겨 보기
 //       docs/assets/editor.gif|mp4 — 편집 화면에서 속도·구간·배경색 고치고 내보내기
 //       docs/assets/start.png, working.png, approve-plan.png, approve-final.png — 시작하기 문서의 화면 캡처
 // 재료 프로젝트를 임시 폴더에 복사해 단계별 상태(녹화 확인 대기, 완성본 확인 대기)를 만들고, 그 폴더로 시작 화면 서버를 띄운다.
@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import YAML from 'yaml';
 import { record } from 'walkthrough-recorder';
 import { ROOT, RUNS, loadRules, assertProject, projectConf, ff, probe, now } from './lib.mjs';
 
@@ -41,6 +42,12 @@ function stage(kind) {
   const st = kind === 'plan' ? { done: { P1: t(10) } } : kind === 'making' ? { done: { P1: t(20) }, approved_plan_at: t(10) } : { done: { P1: t(20), P3: t(5) }, approved_plan_at: t(10) };
   fs.mkdirSync(path.join(DEMO_RUNS, '.harness', 'state'), { recursive: true });
   fs.writeFileSync(path.join(DEMO_RUNS, '.harness', 'state', `${NAME}.json`), JSON.stringify(st, null, 2));
+}
+// 진행 방식 바꾸기 (화면 캡처마다 그 모드의 실제 화면을 찍는다)
+function setMode(mode) {
+  const doc = YAML.parseDocument(fs.readFileSync(DEMO_PROJECTS, 'utf8'));
+  if (mode === 'auto') doc.deleteIn(['projects', NAME, 'mode']); else doc.setIn(['projects', NAME, 'mode'], mode);
+  fs.writeFileSync(DEMO_PROJECTS, String(doc));
 }
 // AI가 일하는 중인 상태: 하네스가 실제로 남기는 표시(에이전트 편집 범위 파일, 녹화·내보내기 표시)를 그대로 만든다
 const harness = (...p) => path.join(DEMO_RUNS, '.harness', ...p);
@@ -108,7 +115,10 @@ let heroT0 = 0;
 const sinceStart = () => (Date.now() - heroT0) / 1000;
 async function nav(page, tap, sel, ready) {
   const a = sinceStart();
+  // 시작 화면은 3초마다 다시 그려져 누르는 순간 버튼이 바뀌면 클릭이 빠질 수 있다 — 안 넘어갔으면 그 주소로 연다
+  const href = await page.locator(sel).first().getAttribute('href').catch(() => null);
   await tap(sel, { blur: false });   // 링크는 누르면 페이지가 바뀌어 blur를 할 수 없다
+  if (href) await page.waitForURL((u) => u.pathname === new URL(href, BASE).pathname, { timeout: 3000 }).catch(() => page.goto(new URL(href, BASE).href));
   await page.waitForSelector(ready);
   await page.screenshot({ timeout: 15000 });
   const b = sinceStart();
@@ -120,14 +130,14 @@ const heroRaw = await record({
   scenario: loud(async ({ page, tap, dwell, goto, startCapture, stopCapture }) => {
     page.setDefaultTimeout(8000);   // 선택자가 안 맞으면 멈춰 있지 않고 실패한다. 녹화 루프의 스크린샷이 페이지 이동 중에 걸려도 8초 안에 풀린다
     await goto('/');
-    await page.waitForSelector('.hero input');
+    await page.waitForSelector('.hero input[type=text]');
     startCapture();
     heroT0 = Date.now();
     await caption(page, '① 녹화할 사이트 주소를 넣어요');
     await dwell(900);
-    const input = page.locator('.hero input');
+    const input = page.locator('.hero input[type=text]');
     await tap(input, { blur: false });
-    await input.pressSequentially(conf.url, { delay: 28 });
+    await input.pressSequentially(conf.url.replace(/^https?:\/\//, ''), { delay: 40 });   // https:// 없이 넣어도 된다
     await dwell(400);
     await tap('.hero button[type=submit]');
     await page.waitForSelector('.step');
@@ -141,50 +151,33 @@ const heroRaw = await record({
     working('planner');   // ---- AI가 장면을 정하고 녹화하는 동안 ----
     await page.waitForSelector('.step.working', { timeout: 8000 });
     await caption(page, '③ AI가 사이트를 둘러보고 찍을 장면을 정해요');
-    await dwell(2200);
+    await dwell(2000);
     working('record');
     await page.waitForSelector('text=녹화하는 중이에요', { timeout: 8000 });
     await caption(page, '녹화하는 중 — 진행 상황이 화면에 보여요');
-    await dwell(2000);
-    working(null);
-    stage('plan');   // ---- AI가 녹화를 마친 뒤 ----
-    await page.waitForSelector('.nowcard a.btn', { timeout: 8000 });
-    await caption(page, '④ 녹화가 끝나면 화면에서 보고 승인해요');
-    await dwell(1300);
-    await nav(page, tap, '.nowcard a.btn', '.rec video');
-    await caption(page, '계획한 장면과 실제 녹화본을 나란히 확인');
-    await page.evaluate(() => { const v = document.querySelector('.rec video'); v.playbackRate = 2; v.play(); });
-    await dwell(2600);
-    for (const box of await page.locator('[data-seen]').all()) { await tap(box); await dwell(250); }   // 녹화본마다 "끝까지 봤어요"
-    await dwell(300);
-    await tap('#bar button.primary');
-    await page.waitForSelector('.modal');
-    await dwell(1400);
-
-    stage('making');   // ---- AI가 구간·속도를 정하고 파일을 만드는 동안 ----
+    await dwell(1800);
+    stage('making');   // ---- AI가 구간·속도를 정하고 파일을 만드는 동안 (자동 생성은 중간에 멈추지 않는다) ----
     working('editor');
-    await nav(page, tap, '.modal a', '.step.working');   // "진행 화면으로"
-    await caption(page, '⑤ AI가 쓸 구간과 속도를 정해요');
-    await dwell(2000);
+    await page.waitForSelector('text=구간·속도 정하기', { timeout: 8000 });
+    await caption(page, '④ 확인 없이 바로 게시물 파일을 만들어요');
+    await dwell(1800);
     working('export');
     await page.waitForSelector('text=영상·이미지 파일을 만드는 중이에요', { timeout: 8000 });
     await caption(page, '영상·이미지 파일을 만드는 중');
-    await dwell(2000);
+    await dwell(1800);
     working(null);
-    stage('final');   // ---- AI가 게시물 파일을 만든 뒤 ----
-    await page.waitForSelector('.nowcard a.btn', { timeout: 8000 });
-    await nav(page, tap, '.nowcard a.btn', '.asset');
-    await caption(page, '⑥ 완성본을 게시물처럼 넘겨 보고 승인해요');
-    await dwell(1300);
+    stage('final');   // ---- 자동 검사 통과 → 승인 없이 완성 ----
+    await page.waitForSelector('text=완성됐어요', { timeout: 8000 });
+    await caption(page, '⑤ 승인 없이 자동으로 완성 — 1080×1440 파일이 남아요');
+    await dwell(2000);
+    await nav(page, tap, '.nowcard a.btn.sub[href$="approve/final"]', '.asset');
+    await caption(page, '결과를 게시물처럼 넘겨 봐요');
+    await dwell(900);
     await tap('#tabFeed');
-    for (let i = 0; i < 5; i++) { await dwell(750); await tap('.feed > button:last-child', { pre: 120, post: 100 }); }
-    await dwell(700);
-    await tap('#bar button.primary');
-    await page.waitForSelector('.modal');
-    await dwell(1100);
-    await nav(page, tap, '.modal a', 'text=완성됐어요');
-    await caption(page, '완성 — 1080×1440 영상·이미지 파일이 남아요');
-    await dwell(2200);
+    for (let i = 0; i < 5; i++) { await dwell(700); await tap('.feed > button:last-child', { pre: 120, post: 100 }); }
+    await dwell(900);
+    await caption(page, '다듬고 싶으면 편집 모드로 — 아래 세부 수정 도구');
+    await dwell(1600);
     await stopCapture();
   }),
 });
@@ -250,12 +243,15 @@ const stills = [];
   await page.waitForSelector('.step.working');
   await shot('working');
   working(null);
+  setMode('review');   // 녹화 확인 화면은 꼼꼼 모드에서만 승인 단계로 나온다
   stage('plan');
   await page.goto(`${BASE}/p/${NAME}/approve/plan`);
-  await page.waitForSelector('.rec video');
-  await page.evaluate(() => { const v = document.querySelector('.rec video'); v.currentTime = Math.min(4, v.duration / 2); });
+  await page.waitForSelector('table.mom img');
+  await page.waitForFunction(() => [...document.querySelectorAll('table.mom img')].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
+  await page.evaluate(() => { const v = document.querySelector('.player video'); v.currentTime = Math.min(5.5, v.duration / 2); });
   await page.waitForTimeout(800);
   await shot('approve-plan');
+  setMode('edit');   // 완성본 확인·승인은 편집 모드 화면
   stage('final');
   await page.goto(`${BASE}/p/${NAME}/approve/final`);
   await page.waitForSelector('.asset');

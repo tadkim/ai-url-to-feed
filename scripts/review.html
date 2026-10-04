@@ -7,8 +7,8 @@
 <script src="/ui/lucide.js"></script>
 <style>
   :root {
-    --ui-bg: #f2f2f2; --panel: #ffffff; --panel-2: #f5f5f6; --line: #e1e1e3; --text: #111111; --dim: #6b6b70;
-  --accent: #c6f36b; --accent-ink: #111111; --accent-strong: #3f6a00; --ok: #1f9a55; --bad: #d63a2f; --warn: #a86400; --ai: #6a48d7;
+    --ui-bg: #ebebed; --panel: #ffffff; --panel-2: #f4f4f5; --line: #d4d4d8; --line-2: #a1a1aa; --text: #09090b; --dim: #52525b;
+  --accent: #c6f36b; --accent-ink: #09090b; --accent-strong: #3f6a00; --ok: #15803d; --bad: #c62828; --warn: #a15c00; --ai: #6d28d9;
     --bg: #B987FF; --border: #444444; --bw: 2px; --radius: 0px;
   }
   * { box-sizing: border-box; }
@@ -58,6 +58,21 @@
   .unsynced { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--warn); }
   .unsynced::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
   .synced { font-size: 12px; color: var(--ok); }
+  /* 다른 화면과 같은 검정 상단 바 */
+  .topbar { background: #111113; color: #fafafa; border-bottom: 0; padding: 6px 16px; }
+  .topbar .hint { color: #a1a1aa; }
+  .topbar a { color: var(--accent) !important; }
+  .topbar button.ghost { color: #d4d4d8; }
+  .topbar button.ghost:hover:not(:disabled) { color: #fff; border-color: #52525b; }
+  .topbar .step { color: #a1a1aa; }
+  .topbar .step.now { background: #27272a; color: #fff; }
+  .topbar .step i { background: #27272a; color: #d4d4d8; }
+  .topbar .step.now i { background: var(--accent); color: #09090b; }
+  .topbar .step.done i { background: var(--ok); color: #fff; }
+  .topbar .steps .sep { background: #3f3f46; }
+  .topbar .unsynced { color: #fbbf24; }
+  .topbar .unsynced::before { background: #fbbf24; }
+  .topbar .synced { color: #4ade80; }
 
   /* 처음 한 번 보이는 안내 말풍선 */
   .coach { position: absolute; right: 0; top: calc(100% + 12px); width: 300px; padding: 14px; border-radius: 12px; background: #fff; color: #111; box-shadow: 0 12px 32px rgba(0,0,0,.18); border: 1px solid var(--line); z-index: 40; font-size: 13px; }
@@ -646,7 +661,7 @@ function videoDock(a) {
     h('button', { onclick: () => setter(cur() - frame()), 'aria-label': `${label} 한 프레임 앞으로` }, '−1프레임'), h('button', { onclick: () => setter(cur() + frame()), 'aria-label': `${label} 한 프레임 뒤로` }, '+1프레임'),
     h('button', { onclick: () => setter(big().currentTime), title: `재생 위치를 ${label}으로 (단축키 ${key})` }, '현재 위치로'));
   return [
-    tl, h('div', { class: 'tl-legend' }, h('span', {}, '0:00.0'), h('span', {}, h('span', { style: 'color:var(--accent-strong)' }, '■'), ' 사용할 구간  ', h('span', { style: 'color:var(--warn)' }, '|'), ' 화면 전환  ', h('span', { style: 'color:#fff' }, '|'), ' 재생 위치'), h('span', {}, fmt(d))),
+    tl, h('div', { class: 'tl-legend' }, h('span', {}, '0:00.0'), h('span', {}, h('span', { style: 'color:var(--accent-strong)' }, '■'), ' 사용할 구간  ', h('span', { style: 'color:var(--warn)' }, '|'), ' 화면 전환  ', h('span', { style: 'color:var(--text)' }, '|'), ' 재생 위치'), h('span', {}, fmt(d))),
     h('div', { class: 'trim-rows' }, pointRow('시작 지점', inI, setIn, () => a.in, 'I'), pointRow('끝 지점', outI, setOut, () => a.out, 'O')),
   ];
 }

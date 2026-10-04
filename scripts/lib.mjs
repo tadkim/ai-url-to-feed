@@ -62,6 +62,15 @@ export function assertProject(rules, project) {
 }
 
 // 프로젝트별 요청이 있으면 그 값, 없으면 기본값
+// 진행 방식: auto(승인 없음) | edit(완성본만 승인) | review(촬영 계획·완성본 둘 다 승인)
+export function modeOf(rules, p) {
+  const m = p?.mode ?? rules.default_mode ?? 'auto';
+  if (!(rules.modes ?? ['auto', 'edit', 'review']).includes(m)) throw new Error(`mode는 ${(rules.modes ?? []).join(' | ')} 중 하나: ${m}`);
+  return m;
+}
+export const needsPlanApproval = (mode) => mode === 'review';
+export const needsFinalApproval = (mode) => mode !== 'auto';
+
 export function projectConf(rules, project) {
   const p = rules.projects[project];
   return {
@@ -69,6 +78,7 @@ export function projectConf(rules, project) {
     url: String(p.url).replace(/\/+$/, ''),
     count: p.asset_count ?? rules.assets.count,
     maxVideoSeconds: p.max_video_seconds ?? rules.export.video.max_seconds,
+    mode: modeOf(rules, p),
   };
 }
 
@@ -192,7 +202,9 @@ export function recordHash(rules, project) {
   const plan = readIf(phasePath(rules, project, 'P1'), true);
   if (!plan) return null;
   const dir = planDir(rules, project);
-  return sha(JSON.stringify(plan.recordings ?? null), ...scenarioFiles(rules, project).flatMap((f) => [f, readText(path.join(dir, f))]));
+  // highlights는 사람에게 보여 줄 설명이라 녹화 결과와 상관없다 — 바꿔도 다시 찍지 않는다
+  const recs = (plan.recordings ?? null) && plan.recordings.map(({ highlights: _h, ...r }) => r);
+  return sha(JSON.stringify(recs), ...scenarioFiles(rules, project).flatMap((f) => [f, readText(path.join(dir, f))]));
 }
 
 // 계획 내용 해시: plan.json + 시나리오 (거절 뒤 planner가 실제로 고쳤는지 본다)
@@ -300,6 +312,11 @@ export function planErrors(ctx) {
     names.add(r.name);
     if (r.scenario !== `${r.name}.scenario.mjs`) errs.push(`${r.name}: scenario는 "${r.name}.scenario.mjs"여야 한다`);
     else if (!files.has(r.scenario)) errs.push(`${r.name}: 시나리오 파일 없음 (plan/${r.scenario})`);
+    if (r.highlights != null) {
+      const hl = r.highlights;
+      if (!Array.isArray(hl) || hl.length < 1 || hl.length > 5) errs.push(`${r.name}: highlights는 1~5개 배열이다 (주요 장면 코멘트)`);
+      else for (const x of hl) if (!(Number(x?.t) >= 0) || !String(x?.text ?? '').trim()) errs.push(`${r.name}: highlights 항목은 { t: 초, text: "무엇을 어떻게" }다`);
+    }
   }
   for (const f of files) if (!plan.recordings.some((r) => r.scenario === f)) errs.push(`recordings에 없는 시나리오 파일: ${f}`);
   errs.push(...numbering(plan.assets, conf.count));
@@ -570,15 +587,22 @@ export function latestHistory(project, kind) {
 }
 
 // ---- 사용자 기준 7단계 진행 상황 ----
+// 시작 화면의 단계. 진행 방식(mode)에 따라 쓰는 단계가 다르다
+//   auto: 준비 → 사이트 등록 → 녹화 → 게시물 만들기 → 완성
+//   edit: … → 게시물 만들기 → 다듬기·승인 → 완성
+//   review: … → 녹화 → 녹화 확인 → 게시물 만들기 → 다듬기(선택) → 완성(승인)
 export const STAGES = [
-  { id: 1, title: '준비', who: 'computer' },
-  { id: 2, title: '사이트 등록', who: 'me' },
-  { id: 3, title: '녹화', who: 'ai' },
-  { id: 4, title: '녹화 확인', who: 'me' },
-  { id: 5, title: '게시물 만들기', who: 'ai' },
-  { id: 6, title: '다듬기', who: 'me', optional: true },
-  { id: 7, title: '완성', who: 'me' },
+  { key: 'env', title: '준비', who: 'computer' },
+  { key: 'site', title: '사이트 등록', who: 'me' },
+  { key: 'record', title: '녹화', who: 'ai' },
+  { key: 'check', title: '녹화 확인', who: 'me', modes: ['review'] },
+  { key: 'make', title: '게시물 만들기', who: 'ai' },
+  { key: 'tune', title: '다듬기', who: 'me', modes: ['edit', 'review'] },
+  { key: 'done', title: '완성', who: 'done' },
 ];
+export const stagesFor = (mode) => STAGES.filter((s) => !s.modes || s.modes.includes(mode)).map((s, i) => ({ ...s, id: i + 1,
+  ...(mode === 'edit' && s.key === 'tune' ? { title: '다듬기·승인' } : {}), ...(mode === 'review' && s.key === 'tune' ? { optional: true } : {}),
+  ...(mode !== 'auto' && s.key === 'done' ? { who: 'me' } : {}) }));
 
 // 지금 돌고 있는 에이전트 (begin 뒤 end 전)
 export function runningAgent(project) {
@@ -617,59 +641,103 @@ export function progress(rules, project, st, next, env = {}) {
   const recs = (ctx.raw?.recordings ?? []).filter((r) => !r.error);
   const conf = ctx.conf;
   const c = (label, done, detail) => ({ label, done: !!done, detail: detail ?? null });
-  const stages = STAGES.map((s) => ({ ...s, checks: [] }));
+  const mode = conf.mode;
+  const stages = stagesFor(mode).map((s) => ({ ...s, checks: [] }));
+  const S = Object.fromEntries(stages.map((x) => [x.key, x]));
+  const none = { checks: [] };
   const tools = env.tools ?? [];
-  stages[0].checks = [
+  (S.env ?? none).checks = [
     c('Node.js · ffmpeg', !tools.some((t) => /node|ffmpeg|ffprobe/.test(t))),
     c('녹화 엔진 · 패키지', !tools.some((t) => /npm 패키지/.test(t))),
     c('녹화용 브라우저', env.chromium !== false, env.chromium === false ? 'npx playwright install chromium' : null),
   ];
-  stages[1].checks = [
+  (S.site ?? none).checks = [
     c('주소 등록', true, conf.url),
     c('사이트 응답', env.site?.ok, env.site ? (env.site.ok ? env.site.title || '응답 확인' : env.site.error) : '확인 전'),
     c(conf.allow_writes ? '저장 요청 허용 (직접 설정)' : '저장 요청 차단', true),
   ];
-  stages[2].checks = [
+  (S.record ?? none).checks = [
     c('장면 계획', ctx.plan && st.done.P1, ctx.plan ? `에셋 ${ctx.plan.assets?.length ?? 0}개 · 녹화 ${ctx.plan.recordings?.length ?? 0}개` : null),
     c('시나리오 검사', ctx.plan && ok('plan_valid') && ok('scenario_rules')),
     c('녹화', recs.length && ctx.raw?.record_hash === recordHash(rules, project), recs.length ? recs.map((r) => `${r.name} ${Math.round(r.duration * 10) / 10}초`).join(' · ') : null),
     c('녹화 검사', recs.length && ok('raw_files')),
   ];
-  stages[3].checks = [
+  (S.check ?? none).checks = [
     c('녹화본 보기', recs.length > 0),
     c('촬영 계획 승인', ok('approval_plan')),
   ];
-  stages[4].checks = [
+  (S.make ?? none).checks = [
     c('구간·속도 제안', ctx.edits && st.done.P3),
     c('파일 만들기', exported, exported ? `${ctx.exp.assets.length}개` : null),
     c('자동 검사', p4Current && p4.pass, p4Current ? (p4.pass ? '모두 통과' : `${p4.results.filter((r) => !r.pass && r.gate !== 'approval_final').length}개 실패`) : null),
   ];
-  stages[5].checks = [
+  (S.tune ?? none).checks = mode === 'edit' ? [
+    c('편집 화면에서 다듬기 (선택)', exported && p4Current, '구간·속도·배경색을 고치고 내보내기를 누르면 반영돼요'),
+    c('완성본 승인', ok('approval_final')),
+  ] : [
     c('편집 화면에서 확인 (선택)', exported && p4Current),
   ];
-  stages[6].checks = [
-    c('완성본 승인', ok('approval_final')),
+  (S.done ?? none).checks = [
+    mode === 'review' ? c('완성본 승인', ok('approval_final')) : c(mode === 'auto' ? '자동 검사 통과로 완성' : '완성', next.next === 'DONE', exported ? `runs/${project}/export/` : null),
   ];
   for (const s of stages) s.done = s.checks.every((x) => x.done);
   // 지금 단계: status의 next로 정한다
-  const at = { P1: 3, P2: 3, APPROVAL_PLAN: 4, P3: 5, P4: 5, APPROVAL_FINAL: 7, DONE: 7 }[next.next];
-  let current = next.next === 'STOP' ? (stages.find((s) => !s.done && !s.optional)?.id ?? 7) : at ?? 3;
+  const atKey = { P1: 'record', P2: 'record', APPROVAL_PLAN: 'check', P3: 'make', P4: 'make', APPROVAL_FINAL: mode === 'edit' ? 'tune' : 'done', DONE: 'done' }[next.next];
+  const last = stages.length;
+  let current = next.next === 'STOP' ? (stages.find((s) => !s.done && !s.optional)?.id ?? last) : (S[atKey]?.id ?? S.record.id);
   if (tools.length || env.chromium === false) current = 1;
-  for (const s of stages) s.state = next.next === 'DONE' || s.id < current || (s.optional && current === 7 && s.done) ? 'done' : s.id === current ? (next.next === 'STOP' ? 'stopped' : 'now') : 'todo';
-  if (current === 7 && next.next === 'APPROVAL_FINAL') stages[5].state = stages[5].done ? 'done' : 'optional';
+  for (const s of stages) s.state = next.next === 'DONE' || s.id < current || (s.optional && current === last && s.done) ? 'done' : s.id === current ? (next.next === 'STOP' ? 'stopped' : 'now') : 'todo';
+  if (mode === 'review' && current === last && next.next === 'APPROVAL_FINAL') S.tune.state = S.tune.done ? 'done' : 'optional';
   const agent = runningAgent(project);
   const task = agent ? null : runningTask(project);
   const started = !!(ctx.plan || st.done.P1 || agent || task);
   let todo;
-  if (current === 1) todo = { who: 'me', text: '실행 환경을 준비해요', detail: tools.join(' / ') || 'npx playwright install chromium', link: 'docs/troubleshooting.md' };
+  if (current === 1 && (tools.length || env.chromium === false)) todo = { who: 'me', text: '실행 환경을 준비해요', detail: tools.join(' / ') || 'npx playwright install chromium', link: 'docs/troubleshooting.md' };
   else if (next.next === 'STOP') todo = { who: 'me', text: '멈췄어요 — 이유를 확인하고 고친 뒤 이어서 진행해요', detail: next.reason, say: `${project} 계속 진행해`, link: 'docs/troubleshooting.md' };
   else if (agent) todo = { who: 'ai', text: `AI가 작업 중이에요 (${agent.agent === 'planner' ? '장면 계획·녹화 준비' : '구간·속도 정하기'})`, since: agent.started_at, detail: '끝나면 이 화면에 다음 할 일이 나와요. 그동안 Claude Code 창을 닫지 않아요.' };
   else if (task) todo = { who: 'ai', text: task.task === 'record' ? '녹화하는 중이에요' : '영상·이미지 파일을 만드는 중이에요', since: task.started_at, detail: task.task === 'record' ? '녹화본마다 1분 안팎 걸려요. 끝나면 이 화면에 다음 할 일이 나와요.' : '1080×1440으로 합성하고 자동 검사를 해요. 끝나면 이 화면에 다음 할 일이 나와요.' };
-  else if (next.next === 'APPROVAL_PLAN') todo = { who: 'me', text: '녹화본을 보고 승인하거나 고칠 점을 적어요', page: 'approve/plan' };
+  else if (next.next === 'APPROVAL_PLAN') todo = { who: 'me', text: '녹화의 주요 장면을 훑어보고 승인해요', detail: '영상을 끝까지 보지 않아도 돼요. 에셋 빼기·순서·설명은 그 화면에서 바로 바꾸고, 다시 찍을 부분은 장면에 메모해요.', page: 'approve/plan' };
+  else if (next.next === 'APPROVAL_FINAL' && mode === 'edit') todo = { who: 'me', text: '자동으로 만든 파일을 내 취향대로 다듬고 승인해요', detail: '편집 화면에서 구간·속도·배경색을 바꾸고 내보내기를 누른 뒤, 완성본 확인에서 승인해요. 그대로 써도 되면 바로 승인해도 돼요.', page: 'approve/final', edit: true, editFirst: true };
   else if (next.next === 'APPROVAL_FINAL') todo = { who: 'me', text: '완성본을 보고 승인하거나 고칠 점을 적어요. 직접 다듬어도 돼요', page: 'approve/final', edit: true };
-  else if (next.next === 'DONE') todo = { who: 'done', text: '완성됐어요', detail: `runs/${project}/export/` };
+  else if (next.next === 'DONE') todo = { who: 'done', text: '완성됐어요', detail: `runs/${project}/export/`, mode };
   else if (!started) todo = { who: 'me', text: 'Claude Code에 말해서 시작해요', say: `${project} 하네스 시작해줘` };
   else todo = { who: 'ai', text: 'AI 차례예요. Claude Code에 말하면 이어서 진행해요', say: `${project} 이어서 해줘`, detail: next.reason };
   const doneCount = stages.filter((s) => s.state === 'done').length;
-  return { project, url: conf.url, title: conf.title ?? null, current, stages, todo, next: next.next, reason: next.reason, done: doneCount, total: stages.length };
+  return { project, url: conf.url, title: conf.title ?? null, mode, current, stages, todo, next: next.next, reason: next.reason, done: doneCount, total: stages.length };
+}
+
+// https://를 빼고 넣어도 된다. 내 컴퓨터(localhost, 127.0.0.1, 192.168.x.x)는 http://, 나머지는 https://를 붙인다
+export function withScheme(raw) {
+  const t = String(raw ?? '').trim();
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(t)) return t;
+  const host = t.replace(/^\/\//, '');
+  const local = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.|10\.|[^/.:]+(:\d+)?(\/|$))/i.test(host);
+  return `${local ? 'http' : 'https'}://${host}`;
+}
+
+// 녹화 확인 화면에서 사람이 고친 에셋 목록을 plan.json에 반영한다: 빼기·순서·장면 설명·cue, 녹화의 한 순간으로 새 에셋 추가.
+// 녹화(recordings)와 시나리오는 그대로라 다시 찍지 않는다. items[i].from = 원래 에셋 번호 (새 에셋이면 없음, source·type을 준다)
+// 결과가 규칙에 맞는지는 부르는 쪽이 planErrors로 본다
+export function applyPlanAssets(plan, items) {
+  if (!Array.isArray(items)) throw new Error('assets가 배열이 아니다');
+  const used = new Set();
+  const assets = items.map((it, i) => {
+    let a;
+    if (it.from != null) {
+      const base = plan.assets.find((x) => x.n === Number(it.from));
+      if (!base || used.has(base.n)) throw new Error(`없거나 겹친 에셋: ${it.from}`);
+      used.add(base.n);
+      a = structuredClone(base);
+    } else {
+      if (!plan.recordings.some((r) => r.name === it.source)) throw new Error(`없는 녹화: ${it.source}`);
+      a = { type: it.type === 'video' ? 'video' : 'image', layout: 'single', sources: [it.source], loop: false };
+    }
+    if (it.from == null || it.type) a.type = it.type === 'video' ? 'video' : it.type === 'image' ? 'image' : a.type;
+    if (a.type === 'video') a.layout = 'single';
+    if (it.scene != null) a.scene = String(it.scene).trim();
+    if (it.cue != null && Number.isFinite(Number(it.cue))) a.cue = Math.round(Number(it.cue) * 10) / 10;
+    const { n: _n, ...rest } = a;
+    return { n: i + 1, ...rest };
+  });
+  return { ...plan, assets };
 }

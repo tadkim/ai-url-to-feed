@@ -18,6 +18,7 @@ import {
   ROOT, RUNS, readJson, readIf, exists, writeJson, now, loadRules, assertProject, derivedPath, loadContext,
   gatesFor, runGates, isHuman, planHash, recordHash, finalHash, editsHash, exportHash, assetHash, assetFile,
   loadState, saveState, appendLog, readLog, scopeDir, editsErrors, toolProblems, planContentHash, snapshotHistory,
+  needsPlanApproval, needsFinalApproval,
 } from './lib.mjs';
 
 const [cmd, project, phaseArg] = process.argv.slice(2);
@@ -56,8 +57,10 @@ export function status(rules, project) {
   f = failing('P2');
   if (f.length) return { next: 'P1', todo: 'agent', reason: 'P2 게이트 FAIL — 시나리오를 고친다', failing: f };
 
-  // 승인 1: 에셋 목록 + 녹화본
-  if (!human('approval_plan')) return { next: 'APPROVAL_PLAN', reason: st.approved_plan_at ? '승인 뒤 계획·녹화본이 바뀜 — 다시 승인받는다' : '사람 승인 대기 — 에셋 목록과 녹화본을 요약하고, 시작 화면의 녹화 확인(/p/<p>/approve/plan)을 알려 준다' };
+  // 승인 1: 에셋 목록 + 녹화본 (review 모드만). auto·edit 모드는 녹화가 끝난 시점을 승인 시점으로 본다
+  const mode = ctx.conf.mode;
+  const planOkAt = needsPlanApproval(mode) ? st.approved_plan_at : ctx.raw?.recorded_at;
+  if (needsPlanApproval(mode) && !human('approval_plan')) return { next: 'APPROVAL_PLAN', reason: st.approved_plan_at ? '승인 뒤 계획·녹화본이 바뀜 — 다시 승인받는다' : '사람 승인 대기 — 에셋 목록과 녹화본을 요약하고, 시작 화면의 녹화 확인(/p/<p>/approve/plan)을 알려 준다' };
 
   // P3 편집값
   if (st.final_rejects > rules.retry.final_reject) return { next: 'STOP', reason: `완성본 거절 ${st.final_rejects}회 — retry.final_reject(${rules.retry.final_reject}) 초과` };
@@ -66,7 +69,7 @@ export function status(rules, project) {
   const rejected = unchanged && (!after(st.done.P3, st.final_rejected_at) || after(st.unblocked_at, st.done.P3));
   // 거절 뒤 editor가 돌았는데 편집값이 그대로면 요청이 반영되지 않은 것이다 — 완성본 승인 대기로 넘기지 않는다
   if (unchanged && !rejected) return { next: 'STOP', reason: 'editor가 거절 요청을 반영하지 못했다 (edits.json이 거절 때와 같다). 검토 화면에서 직접 고치거나 "계속 진행해"', notes: st.final_notes.slice(-1) };
-  if (!ctx.edits || !after(st.done.P3, st.approved_plan_at) || rejected) {
+  if (!ctx.edits || !after(st.done.P3, planOkAt) || rejected) {
     return { next: 'P3', todo: 'agent', reason: rejected ? '완성본 거절 — 사람 요청을 editor에게 넘긴다' : '승인 1 이후 P3 완료 기록 없음', notes: rejected ? st.final_notes.slice(-1) : undefined };
   }
   f = failing('P3');
@@ -88,7 +91,8 @@ export function status(rules, project) {
     return { next: 'P3', todo: 'agent', reason: `P4 FAIL (시도 ${p4.attempt}/${p4.max_attempts}) — failing을 editor에게 넘긴다`, failing: p4Failing };
   }
 
-  // 승인 2
+  // 승인 2 (edit·review 모드). auto 모드는 자동 검사를 통과하면 완성이다
+  if (!needsFinalApproval(mode)) return { next: 'DONE', reason: '자동 모드 — 모든 자동 검사 PASS (사람 승인 없이 완성)' };
   if (!human('approval_final')) return { next: 'APPROVAL_FINAL', reason: st.approved_final_at ? '승인 뒤 에셋·편집값이 바뀜 — 다시 승인받는다' : '사람 승인 대기 — 시작 화면의 완성본 확인(/p/<p>/approve/final)을 알려 준다' };
   return { next: 'DONE', reason: '모든 게이트 PASS, 촬영 계획·완성본 승인' };
 }

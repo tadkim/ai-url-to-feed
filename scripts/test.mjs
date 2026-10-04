@@ -10,7 +10,9 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-test-'));
 process.env.HARNESS_RUNS = TMP;
 // 실제 projects.yaml과 상관없이 테스트용 프로젝트 1개로 돌린다
 process.env.HARNESS_PROJECTS = path.join(TMP, 'projects.yaml');
-fs.writeFileSync(process.env.HARNESS_PROJECTS, 'projects:\n  test-site:\n    url: http://127.0.0.1:9\n    title: 테스트 사이트\n    target: local\n    allow_writes: false\n');
+// review 모드(승인 2번)로 전체 흐름을 보고, 중간에 auto·edit 모드로 바꿔 승인을 건너뛰는지 본다
+const writeProjects = (mode) => fs.writeFileSync(process.env.HARNESS_PROJECTS, `projects:\n  test-site:\n    url: http://127.0.0.1:9\n    title: 테스트 사이트\n    target: local\n    allow_writes: false\n    mode: ${mode}\n`);
+writeProjects('review');
 const L = await import('./lib.mjs');
 const { coverPng } = await import('./export.mjs');
 
@@ -100,6 +102,11 @@ const recEntry = (name) => { const p = L.probe(dir(`raw/${name}.mp4`)); return {
 L.writeJson(L.derivedPath(rules, P, 'raw'), { record_hash: L.recordHash(rules, P), recorded_at: L.now(), recordings: [recEntry('r1'), recEntry('flat')] });
 eq(L.rawErrors(L.loadContext(rules, P)), [], '녹화본 통과');
 eq(status().next, 'APPROVAL_PLAN', '녹화 뒤 승인 1');
+writeProjects('edit');
+eq(status().next, 'P3', 'edit 모드: 촬영 계획 승인 없이 편집으로');
+writeProjects('auto');
+eq(status().next, 'P3', 'auto 모드: 촬영 계획 승인 없이 편집으로');
+writeProjects('review');
 eq(node('run.mjs', 'approve', P, 'final').code, 2, '단계가 아닐 때 완성본 승인 거부');
 eq(node('run.mjs', 'approve', P, 'plan').json?.next, 'P3', '승인 1 → P3');
 
@@ -137,6 +144,17 @@ ok(Math.abs(v1.duration - 2) < 0.05, '4초 구간 ÷ 2배속 = 2초', `— ${v1.
 const img = L.probe(dir('export/03.png'));
 eq([img.width, img.height], [W, H], '이미지 규격');
 eq(status().next, 'APPROVAL_FINAL', '판정 뒤 승인 2');
+writeProjects('auto');
+eq(status().next, 'DONE', 'auto 모드: 자동 검사를 통과하면 승인 없이 완성');
+writeProjects('edit');
+eq(status().next, 'APPROVAL_FINAL', 'edit 모드: 완성본은 한 번 승인한다');
+{
+  const r2 = L.loadRules();
+  const stg = (m) => L.progress({ ...r2, projects: { [P]: { ...r2.projects[P], mode: m } } }, P, L.loadState(r2, P), status()).stages.map((x) => x.title);
+  eq([stg('auto').length, stg('edit').length, stg('review').length], [5, 6, 7], '진행 단계 수: auto 5 · edit 6 · review 7');
+  ok(!stg('auto').includes('녹화 확인') && stg('edit').includes('다듬기·승인'), '진행 단계: auto는 확인 단계 없음, edit은 다듬기·승인');
+}
+writeProjects('review');
 
 // 순서만 바꾸면 다시 인코딩하지 않는다
 const swapped = structuredClone(edits); [swapped.assets[1], swapped.assets[2]] = [swapped.assets[2], swapped.assets[1]]; swapped.assets.forEach((a, i) => { a.n = i + 1; });
@@ -197,6 +215,30 @@ const readPost = (u) => rules.record.read_post.some((x) => new RegExp(x).test(u)
 ok(readPost('https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel'), '읽기 POST: Firestore Listen은 통과');
 ok(!readPost('https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel'), '쓰기 POST: Firestore Write는 막는다');
 ok(!readPost('https://firestore.googleapis.com/v1/projects/p/databases/(default)/documents:commit'), '쓰기 POST: Firestore commit은 막는다');
+
+// 녹화 확인 화면: 주요 장면 코멘트, 사람이 고친 에셋 목록
+{
+  const pctx = L.loadContext(rules, P);
+  const withHl = (hl) => L.planErrors({ ...pctx, plan: { ...pctx.plan, recordings: pctx.plan.recordings.map((r, i) => (i ? r : { ...r, highlights: hl })) } }).filter((e) => /highlights/.test(e));
+  eq(withHl([{ t: 1, text: '첫 화면을 3초 둠' }]), [], 'highlights: 시점과 설명이 있으면 통과');
+  ok(withHl([]).length && withHl([{ t: -1, text: 'x' }]).length && withHl(Array(6).fill({ t: 1, text: 'x' })).length, 'highlights: 비었거나 6개 이상이거나 시점이 틀리면 FAIL');
+  const edited = L.applyPlanAssets(pctx.plan, [{ from: 2, scene: '바꾼 설명' }, { from: 1 }, { source: pctx.plan.recordings[0].name, type: 'image', scene: '새 장면', cue: 1.23 }]);
+  eq(edited.assets.map((a) => [a.n, a.type, a.scene]), [[1, pctx.plan.assets[1].type, '바꾼 설명'], [2, pctx.plan.assets[0].type, pctx.plan.assets[0].scene], [3, 'image', '새 장면']], '에셋 고치기: 순서·설명·추가, 번호는 다시 매긴다');
+  eq(edited.assets[2].cue, 1.2, '에셋 고치기: 새 에셋은 그 순간(cue)과 녹화를 기억한다');
+  ok(edited.recordings === pctx.plan.recordings, '에셋 고치기: 녹화·시나리오는 그대로라 다시 찍지 않는다');
+  const rh = L.recordHash(rules, P);
+  const planFile = L.phasePath(rules, P, 'P1');
+  const orig = fs.readFileSync(planFile, 'utf8');
+  fs.writeFileSync(planFile, JSON.stringify({ ...pctx.plan, recordings: pctx.plan.recordings.map((r) => ({ ...r, highlights: [{ t: 1, text: '설명' }] })) }));
+  eq(L.recordHash(rules, P), rh, 'highlights를 더해도 다시 찍지 않는다');
+  fs.writeFileSync(planFile, orig);
+  let threw = false; try { L.applyPlanAssets(pctx.plan, [{ from: 1 }, { from: 1 }]); } catch { threw = true; }
+  ok(threw, '에셋 고치기: 같은 에셋을 두 번 넣으면 막는다');
+}
+
+// 시작 화면 주소 입력: https:// 없이 넣어도 된다
+eq(['stuckyi.studio', 'https://a.com', 'localhost:3000', '127.0.0.1:4400/app', 'www.a.co.kr/x'].map(L.withScheme),
+  ['https://stuckyi.studio', 'https://a.com', 'http://localhost:3000', 'http://127.0.0.1:4400/app', 'https://www.a.co.kr/x'], '주소 앞에 https:// (내 컴퓨터는 http://)를 붙인다');
 
 // 편집 범위
 node('run.mjs', 'begin', P, 'P3');

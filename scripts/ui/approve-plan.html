@@ -7,37 +7,74 @@
 <link rel="stylesheet" href="/ui/base.css">
 <script src="/ui/lucide.js"></script>
 <style>
-  main { max-width: 1240px; margin: 0 auto; padding: 16px 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
-  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+  main { max-width: 1440px; margin: 0 auto; padding: 12px 16px 16px; display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 12px; align-items: start; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
   .full { grid-column: 1 / -1; }
-  .note { background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+  .note { background: color-mix(in srgb, var(--warn) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
   .note b { color: var(--warn); }
-  .rec { display: flex; flex-direction: column; gap: 10px; }
-  .vids { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 260px)); gap: 14px; }
-  .vids figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-  .vids video { width: 100%; aspect-ratio: 9 / 16; background: var(--panel-2); border-radius: 8px; }
-  .vids figcaption { font-size: 12px; color: var(--dim); }
-  .vids figure.now figcaption b { color: var(--accent-strong); }
-  .sheet { max-width: 100%; border-radius: 6px; }
-  .assets { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 64px; }
-  .a { background: var(--ui-bg); border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: 34px 1fr; gap: 2px 8px; }
-  .a .n { font-weight: 700; font-size: 16px; grid-row: span 3; }
-  .a .t { font-size: 12px; color: var(--dim); }
-  .a .cue { justify-self: start; padding: 2px 10px; font-size: 12px; }
-  .a.changed { outline: 1px solid color-mix(in srgb, var(--warn) 60%, transparent); }
-  .seen { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); cursor: pointer; }
-  .seen input { accent-color: var(--ok); }
-  .actionbar .reject { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-  .approve { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .recs { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .rec .pb { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }
+  @media (max-width: 700px) { .rec .pb { grid-template-columns: 1fr; } }
+  .rec .ph .nm { font: 700 13px ui-monospace, Menlo, monospace; }
+  .rec .ph .uses { display: flex; gap: 4px; }
+  .rec .ph .uses span { font-size: 11px; font-weight: 600; border: 1px solid var(--line-2); border-radius: 4px; padding: 0 6px; background: var(--panel); }
+  .rec .desc { grid-column: 1 / -1; font-size: 12px; color: var(--dim); margin: -2px 0 0; }
+  .player { display: flex; flex-direction: column; gap: 6px; }
+  .player video { width: 100%; aspect-ratio: 9 / 16; background: var(--text); border-radius: 6px; display: block; }
+  .player button { font-size: 12px; padding: 3px 6px; }
+  table.mom { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.mom th { text-align: left; font-size: 11px; font-weight: 600; color: var(--dim); padding: 0 6px 4px; border-bottom: 1px solid var(--line); }
+  table.mom td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.mom tr.m { cursor: pointer; }
+  table.mom tr.m:hover td { background: var(--panel-2); }
+  table.mom tr.m.at td { background: color-mix(in srgb, var(--accent) 35%, var(--panel)); }
+  table.mom img { width: 24px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 3px; display: block; background: var(--panel-2); border: 1px solid var(--line); }
+  table.mom .t { font: 600 12px ui-monospace, Menlo, monospace; white-space: nowrap; }
+  table.mom .acts { white-space: nowrap; text-align: right; }
+  .ib { width: 26px; height: 26px; padding: 0; display: inline-grid; place-items: center; }
+  tr.memo td { background: color-mix(in srgb, var(--warn) 7%, var(--panel)); }
+  tr.memo .tag { font: 600 12px ui-monospace, Menlo, monospace; color: var(--warn); white-space: nowrap; }
+  tr.memo input { padding: 3px 6px; font-size: 12.5px; }
+  .quick { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 8px; font-size: 12px; }
+  .quick button { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+  .quick button.on { background: var(--warn); border-color: var(--warn); color: #fff; }
+  .sheet { max-width: 100%; border-radius: 4px; margin-top: 6px; }
+  details.more summary { font-size: 12px; color: var(--dim); cursor: pointer; margin-top: 6px; }
+  .assets { position: sticky; top: 92px; max-height: calc(100vh - 160px); display: flex; flex-direction: column; }
+  .assets .pb { overflow-y: auto; padding: 0; }
+  .assets .saved { margin-left: auto; font-size: 11px; color: var(--ok); font-weight: 600; }
+  table.as { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.as th { position: sticky; top: 0; background: var(--panel); text-align: left; font-size: 11px; font-weight: 600; color: var(--dim); padding: 6px 6px; border-bottom: 1px solid var(--line-2); z-index: 1; }
+  table.as td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.as tr.changed td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+  table.as .n { font: 700 13px ui-monospace, Menlo, monospace; padding-top: 8px; }
+  table.as select { font-size: 12px; padding: 2px 2px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); width: 64px; }
+  table.as .src { font: 11px ui-monospace, Menlo, monospace; color: var(--dim); margin-top: 3px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  table.as .src button { padding: 0 4px; font-size: 11px; }
+  table.as textarea { min-height: 0; field-sizing: content; resize: none; padding: 3px 5px; border-color: transparent; font-size: 12.5px; line-height: 1.4; }
+  table.as textarea:hover:not(:disabled), table.as textarea:focus { border-color: var(--line-2); }
+  table.as .acts { white-space: nowrap; width: 1%; }
+  .removed td { color: var(--dim); text-decoration: line-through; }
+  .removed td:last-child { text-decoration: none; }
+  .afoot { padding: 8px 12px; font-size: 11.5px; color: var(--dim); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+  .afoot div { display: flex; gap: 6px; align-items: flex-start; }
+  .actionbar .left { flex: 1; display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .actionbar .left input { flex: 1; min-width: 160px; padding: 5px 8px; }
+  .summary { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46%; }
+  .summary b { color: var(--warn); }
+  .actionbar button { padding: 6px 14px; }
 </style>
 </head>
 <body>
 <div class="topbar">
   <a id="back" href="/">진행 화면</a>
+  <span class="hint">/</span>
   <h1 id="title">녹화 확인</h1>
   <span class="grow"></span>
-  <span class="hint">AI가 정한 장면 계획과 실제 녹화본을 비교해요</span>
+  <span class="hint">재생</span>
+  <div id="speed" class="row" style="gap:4px"></div>
 </div>
+<div class="subbar" id="sub"></div>
 <main id="main"></main>
 <div class="actionbar" id="bar"></div>
 
@@ -45,81 +82,217 @@
 import { $, h, api, toast, sayBox, projectFromPath, modal, nn, icon } from '/ui/common.js';
 const P = projectFromPath();
 const sec = (x) => `${Math.round(x * 10) / 10}초`;
+const clock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+const QUICK = ['조작을 더 빠르게', '조작을 더 천천히', '스크롤을 사람처럼 자연스럽게', '이 녹화는 다시 찍기'];
 let D = null;
-const seen = new Set();
-const players = new Map();   // 녹화 이름 → 지금 영상 요소
+const players = new Map();   // 녹화 이름 → video. 화면을 다시 그려도 재생 위치가 유지되게 한 번만 만든다
+// 고칠 점 메모: { rec, t?, text }. 새로고침해도 남게 이 브라우저에만 저장한다
+const KEY = `plan-memos:${P}`;
+let memos = [];
+try { memos = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { memos = []; }
+const saveMemos = () => { try { localStorage.setItem(KEY, JSON.stringify(memos)); } catch { /* 저장 못 해도 화면에는 남는다 */ } renderBar(); };
+let speed = 2;
+
+const thumbUrl = (rec, t) => `/api/projects/${P}/thumb?rec=${encodeURIComponent(rec)}&t=${t.toFixed(1)}`;
+function seek(rec, t) {
+  const v = players.get(rec);
+  if (!v) return;
+  v.currentTime = t; v.playbackRate = speed; v.play().catch(() => {});
+  v.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function addMemo(rec, t, text = '') {
+  memos.push({ rec, t, text }); saveMemos(); render();
+  const inputs = document.querySelectorAll(`[data-memo-rec="${rec}"]`);
+  inputs[inputs.length - 1]?.focus();
+}
 
 function recCard(r) {
-  const prev = D.previous?.recordings.find((x) => x.name === r.name) ?? (D.previous && D.previous.recordings.length === 1 && D.recordings.length === 1 ? D.previous.recordings[0] : null);
-  const now = h('video', { src: r.video, controls: true, muted: true, playsinline: true, preload: 'metadata' });
-  now.addEventListener('timeupdate', () => { if (now.duration && now.currentTime / now.duration > 0.9) markSeen(r.name); });
-  players.set(r.name, now);
-  const old = prev && h('video', { src: prev.video, controls: true, muted: true, playsinline: true, preload: 'metadata' });
-  const both = old && h('button', { onclick: () => { [old, now].forEach((v) => { v.currentTime = 0; v.play(); }); } }, icon('play', 14), ' 이전과 지금 같이 재생');
-  const diff = prev ? Math.round((r.duration - prev.duration) * 10) / 10 : null;
-  return h('section', { class: 'card rec' },
-    h('div', { class: 'row' }, h('b', {}, r.name), h('span', { class: 'hint' }, sec(r.duration)),
-      diff != null && h('span', { class: `pill ${diff < 0 ? 'ok' : diff > 0 ? 'warn' : ''}` }, diff === 0 ? '길이 같음' : `이전보다 ${diff > 0 ? '+' : ''}${diff}초`),
-      h('span', { class: 'hint' }, `저장 요청 ${r.writes_seen ?? 0}건 · 막은 요청 ${r.writes_blocked ?? 0}건`),
+  const prev = D.previous?.recordings.find((x) => x.name === r.name) ?? null;
+  let v = players.get(r.name);
+  if (v && v.dataset.src !== r.video) v = null;
+  if (!v) {
+    v = h('video', { src: r.video, 'data-src': r.video, controls: true, muted: true, playsinline: true, preload: 'metadata' });
+    v.addEventListener('loadedmetadata', () => { v.playbackRate = speed; });
+    v.addEventListener('timeupdate', () => {
+      let cur = null;
+      r.highlights.forEach((m, i) => { if (v.currentTime + 0.05 >= m.t) cur = i; });
+      document.querySelectorAll(`[data-moment="${r.name}"]`).forEach((el, i) => el.classList.toggle('at', i === cur && !v.paused));
+    });
+    players.set(r.name, v);
+  }
+  const old = prev && h('video', { src: prev.video, controls: true, muted: true, playsinline: true, preload: 'metadata', style: 'width:100%;aspect-ratio:9/16;border-radius:6px;background:var(--text)' });
+  const uses = D.plan.assets.filter((a) => a.sources?.includes(r.name));
+  const mine = memos.filter((m) => m.rec === r.name);
+  const quickOn = (q) => mine.some((m) => m.t == null && m.text === q);
+  const rows = [];
+  r.highlights.forEach((m) => {
+    rows.push(h('tr', { class: 'm', 'data-moment': r.name, onclick: () => seek(r.name, m.t), title: '이 장면부터 재생' },
+      h('td', { style: 'width:42px' }, h('img', { src: thumbUrl(r.name, m.t), alt: '', loading: 'lazy' })),
+      h('td', { class: 't', style: 'width:40px' }, clock(m.t)),
+      h('td', {}, m.text),
+      h('td', { class: 'acts' },
+        h('button', { class: 'ib', title: '이 장면에 고칠 점 메모 (다시 찍기)', disabled: !D.retake, onclick: (e) => { e.stopPropagation(); addMemo(r.name, m.t); } }, icon('message-square-plus', 14)),
+        ' ',
+        h('button', { class: 'ib', title: '이 장면으로 이미지 에셋 추가', disabled: !D.editable, onclick: (e) => { e.stopPropagation(); addAsset(r.name, m.t, m.text); } }, icon('image-plus', 14)))));
+    mine.filter((x) => x.t != null && Math.abs(x.t - m.t) < 0.05).forEach((x) => rows.push(memoRow(r, x)));
+  });
+  mine.filter((x) => x.t != null && !r.highlights.some((m) => Math.abs(x.t - m.t) < 0.05)).forEach((x) => rows.push(memoRow(r, x)));
+  return h('section', { class: 'panel rec' },
+    h('div', { class: 'ph' },
+      h('span', { class: 'nm' }, r.name),
+      h('span', { class: 'kpi' }, '원본 ', h('b', {}, sec(r.duration))),
+      h('span', { class: 'kpi' }, '저장 요청 ', h('b', {}, r.writes_seen ?? 0), ' · 막음 ', h('b', {}, r.writes_blocked ?? 0)),
       h('span', { class: 'grow' }),
-      h('label', { class: 'seen' }, h('input', { type: 'checkbox', 'data-seen': r.name, checked: seen.has(r.name), onchange: (e) => { if (e.target.checked) seen.add(r.name); else seen.delete(r.name); renderBar(); } }), '끝까지 봤어요')),
-    h('div', { class: 'vids', style: `--cols:${old ? 2 : 1}` },
-      old && h('figure', {}, old, h('figcaption', {}, `이전 (거절됨) · ${sec(prev.duration)}`)),
-      h('figure', { class: 'now' }, now, h('figcaption', {}, h('b', {}, '지금'), ` · ${sec(r.duration)}`))),
-    both,
-    h('details', {}, h('summary', { class: 'hint', style: 'cursor:pointer' }, `장면 한눈에 보기 (${r.sheet_every}초 간격, 마지막 칸은 끝 장면)`), h('img', { class: 'sheet', src: r.sheet, alt: `${r.name} 장면 모음`, loading: 'lazy' })));
+      h('span', { class: 'hint' }, '쓰는 에셋'),
+      h('div', { class: 'uses' }, uses.length ? uses.map((a) => h('span', {}, `${nn(a.n)} ${a.type === 'video' ? '영상' : '이미지'}`)) : h('span', {}, '없음'))),
+    h('div', { class: 'pb' },
+      r.note && h('p', { class: 'desc' }, r.note),
+      h('div', { class: 'player' }, v,
+        h('button', { onclick: () => addMemo(r.name, Math.round(v.currentTime * 10) / 10), disabled: !D.retake }, icon('message-square-plus', 13), ' 지금 장면에 메모'),
+        old && h('details', { class: 'more' }, h('summary', {}, `이전 녹화 (${sec(prev.duration)})`), old,
+          h('button', { style: 'margin-top:4px;width:100%', onclick: () => { [old, v].forEach((x) => { x.currentTime = 0; x.playbackRate = speed; x.play().catch(() => {}); }); } }, icon('play', 13), ' 같이 재생'))),
+      h('div', { style: 'min-width:0' },
+        h('table', { class: 'mom' },
+          h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, '시점'), h('th', {}, r.highlights_auto ? '주요 장면 (에셋 시점으로 고름)' : '주요 장면 · AI가 무엇을 어떻게 찍었는지'), h('th', { style: 'text-align:right' }, '메모 · 에셋'))),
+          h('tbody', {}, rows)),
+        h('div', { class: 'quick' }, h('span', { class: 'hint' }, '녹화 전체 →'),
+          QUICK.map((q) => h('button', { class: quickOn(q) ? 'on' : '', disabled: !D.retake, onclick: () => {
+            if (quickOn(q)) memos = memos.filter((x) => !(x.rec === r.name && x.t == null && x.text === q)); else memos.push({ rec: r.name, text: q });
+            saveMemos(); render();
+          } }, q))),
+        h('details', { class: 'more' }, h('summary', {}, `장면 모음 (${r.sheet_every}초 간격)`), h('img', { class: 'sheet', src: r.sheet, alt: `${r.name} 장면 모음`, loading: 'lazy' })))));
+}
+function memoRow(r, m) {
+  return h('tr', { class: 'memo' },
+    h('td', {}, icon('message-square', 14)),
+    h('td', { class: 'tag' }, clock(m.t)),
+    h('td', {}, h('input', { type: 'text', value: m.text, placeholder: '이 장면에서 고칠 점 (예: 버튼 누르기 전 멈춤을 짧게)', 'data-memo-rec': r.name, oninput: (e) => { m.text = e.target.value; saveMemos(); } })),
+    h('td', { class: 'acts' }, h('button', { class: 'ib', 'aria-label': '메모 지우기', onclick: () => { memos = memos.filter((x) => x !== m); saveMemos(); render(); } }, icon('x', 14))));
 }
 
-function assetList() {
+// ---- 에셋 계획: 빼기·순서·설명·추가는 다시 찍지 않고 바로 반영된다 ----
+let draft = [];   // [{ from?, source?, type, layout, scene, cue, sources }]
+let removed = [];
+let saveState = '';
+function resetDraft() {
+  draft = D.plan.assets.map((a) => ({ from: a.n, type: a.type, layout: a.layout, scene: a.scene, cue: a.cue, sources: a.sources }));
+}
+async function saveDraft() {
+  saveState = '저장 중…';
+  const label = $('#assets .saved'); if (label) label.textContent = saveState;   // 적는 중인 칸을 다시 그리지 않는다
+  try {
+    D = await api('PUT', `/api/projects/${P}/plan/assets`, { assets: draft.map((x) => ({ from: x.from, source: x.sources?.[0], type: x.type, scene: x.scene, cue: x.cue })) });
+    resetDraft(); removed = removed.filter((x) => x.from == null || !D.plan.assets.some((a) => a.n === x.from));
+    saveState = '저장됨 · 다시 찍지 않아도 돼요';
+    // 설명을 적는 중이었으면 커서 위치를 그대로 돌려 둔다
+    const f = document.activeElement?.closest?.('#assets') ? document.activeElement : null;
+    const keep = f?.tagName === 'TEXTAREA' ? { label: f.getAttribute('aria-label'), at: f.selectionStart } : null;
+    render();
+    if (keep) { const t = document.querySelector(`#assets textarea[aria-label="${keep.label}"]`); if (t) { t.focus(); t.setSelectionRange(keep.at, keep.at); } }
+  } catch (e) {
+    toast(e.message, true);
+    D = await api('GET', `/api/projects/${P}/compare/plan`); resetDraft(); removed = []; saveState = ''; render();
+  }
+}
+function addAsset(rec, t, text) {
+  if (draft.length >= D.limits.count[1]) return toast(`에셋은 최대 ${D.limits.count[1]}개예요`, true);
+  draft.push({ source: rec, sources: [rec], type: 'image', layout: 'single', scene: text, cue: t });
+  saveDraft();
+}
+let scenesDirty = null;
+function renderAssets() {
+  const el = $('#assets');
+  if (!el) return;
   const prevAssets = D.previous?.plan?.assets ?? [];
-  return h('aside', { class: 'card assets' }, h('h2', {}, `에셋 계획 ${D.plan.assets.length}개`),
-    D.plan.assets.map((a) => {
-      const p = prevAssets.find((x) => x.n === a.n);
-      const changed = D.previous && (!p || p.scene !== a.scene || p.type !== a.type || p.layout !== a.layout);
-      const src = a.sources?.[0];
-      return h('div', { class: `a${changed ? ' changed' : ''}` },
-        h('span', { class: 'n' }, nn(a.n)),
-        h('span', { class: 't' }, `${a.type === 'video' ? '영상' : `이미지 · 화면 ${{ single: 1, double: 2, triple: 3 }[a.layout] ?? '?'}개`} · ${src ?? ''}`, changed ? h('span', { class: 'warn-text' }, ' · 바뀜') : null),
-        h('span', {}, a.scene),
-        a.cue != null && players.has(src) && h('button', { class: 'cue', onclick: () => { const v = players.get(src); v.currentTime = Number(a.cue); v.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, icon('crosshair', 13), ` ${a.cue}초 장면 보기`));
-    }),
-    D.plan.writes_note && h('p', { class: 'hint', style: 'margin:4px 0 0' }, D.plan.writes_note));
+  const [lo, hi] = D.limits.count;
+  const rows = draft.map((a, i) => {
+    const p = prevAssets.find((x) => x.n === a.from);
+    const changed = D.previous && a.from != null && (!p || p.scene !== a.scene || p.type !== a.type || p.layout !== a.layout);
+    const src = a.sources?.[0];
+    return h('tr', { class: changed ? 'changed' : '' },
+      h('td', { class: 'n' }, nn(i + 1)),
+      h('td', {},
+        h('select', { 'aria-label': `${nn(i + 1)} 종류`, disabled: !D.editable, onchange: (e) => { a.type = e.target.value; if (a.type === 'video') a.layout = 'single'; saveDraft(); } },
+          h('option', { value: 'video', selected: a.type === 'video' }, '영상'), h('option', { value: 'image', selected: a.type === 'image' }, '이미지')),
+        a.type === 'image' && a.layout !== 'single' ? h('div', { class: 'src' }, `화면 ${{ double: 2, triple: 3 }[a.layout]}개`) : null),
+      h('td', {},
+        h('textarea', { rows: 1, 'aria-label': `${nn(i + 1)} 장면 설명`, disabled: !D.editable, oninput: (e) => { a.scene = e.target.value; clearTimeout(scenesDirty); scenesDirty = setTimeout(saveDraft, 900); } }, a.scene ?? ''),
+        h('div', { class: 'src' }, src, a.cue != null && h('button', { title: '그 장면 재생', onclick: () => seek(src, Number(a.cue)) }, icon('crosshair', 11), ` ${clock(Number(a.cue))}`), changed && h('span', { class: 'warn-text' }, '· 바뀜'))),
+      h('td', { class: 'acts' },
+        h('button', { class: 'ib', 'aria-label': '앞으로', title: '앞으로', disabled: !D.editable || i === 0, onclick: () => { [draft[i - 1], draft[i]] = [draft[i], draft[i - 1]]; saveDraft(); } }, icon('arrow-up', 13)),
+        h('button', { class: 'ib', 'aria-label': '뒤로', title: '뒤로', disabled: !D.editable || i === draft.length - 1, onclick: () => { [draft[i + 1], draft[i]] = [draft[i], draft[i + 1]]; saveDraft(); } }, icon('arrow-down', 13)),
+        h('button', { class: 'ib', 'aria-label': '빼기', title: '빼기', disabled: !D.editable || draft.length <= lo, onclick: () => { removed.push(draft[i]); draft.splice(i, 1); saveDraft(); } }, icon('trash-2', 13))));
+  });
+  const gone = removed.map((a, i) => h('tr', { class: 'removed' }, h('td', {}, '—'), h('td', {}, a.type === 'video' ? '영상' : '이미지'), h('td', {}, a.scene),
+    h('td', { class: 'acts' }, h('button', { class: 'ib', title: '되살리기', 'aria-label': '되살리기', disabled: !D.editable, onclick: () => { draft.push(a); removed.splice(i, 1); saveDraft(); } }, icon('undo-2', 13)))));
+  el.replaceChildren(
+    h('div', { class: 'ph' }, h('h3', {}, icon('layout-list', 14), '게시물 에셋'), h('span', { class: 'kpi' }, h('b', {}, draft.length), ` / ${lo}~${hi}개`), h('span', { class: 'saved' }, saveState)),
+    h('div', { class: 'pb' }, h('table', { class: 'as' },
+      h('thead', {}, h('tr', {}, h('th', {}, '#'), h('th', {}, '종류'), h('th', {}, '장면 설명 · 녹화 · 시점'), h('th', {}, ''))),
+      h('tbody', {}, rows, gone))),
+    h('div', { class: 'afoot' },
+      h('div', {}, icon('info', 12), h('span', {}, `여기서 바꾼 것은 바로 저장되고 다시 찍지 않아요. 영상은 녹화에서 최대 ${D.limits.maxVideoSeconds}초만 잘라 써요.`)),
+      D.plan.writes_note ? h('details', {}, h('summary', { style: 'cursor:pointer' }, icon('shield-check', 12), ' 사이트에 남는 기록: ', h('b', {}, D.recordings.reduce((t, r) => t + (r.writes_seen ?? 0), 0) ? '있음' : '없음')), h('div', { style: 'margin-top:4px' }, D.plan.writes_note)) : ''));
 }
-
-function markSeen(name) { if (!seen.has(name)) { seen.add(name); document.querySelectorAll(`[data-seen="${name}"]`).forEach((c) => { c.checked = true; }); renderBar(); } }
 
 function render() {
-  players.clear();
+  const nMemo = memos.filter((m) => m.text.trim() && D.recordings.some((r) => r.name === m.rec)).length;
+  const total = D.recordings.reduce((t, r) => t + r.duration, 0);
+  const review = D.mode === 'review';
+  $('#sub').replaceChildren(
+    ...(review ? [
+      h('span', {}, h('span', { class: 'stepn' }, '1'), '주요 장면 훑어보기'), h('span', { class: 'sep' }, '›'),
+      h('span', {}, h('span', { class: 'stepn' }, '2'), '에셋은 오른쪽에서 바로 수정 · 다시 찍을 곳은 장면에 메모'), h('span', { class: 'sep' }, '›'),
+      h('span', {}, h('span', { class: 'stepn' }, '3'), '승인 또는 다시 찍기')]
+      : [h('span', {}, icon('film', 13), ' 녹화 원본이에요. 승인할 필요 없어요. 다시 찍고 싶은 곳만 장면에 메모해 보내요')]),
+    h('span', { class: 'grow' }),
+    h('span', { class: 'kpi' }, '녹화 ', h('b', {}, D.recordings.length)),
+    h('span', { class: 'kpi', title: `녹화 원본은 게시물의 재료예요. 게시물 영상은 필요한 부분만 ${D.limits.maxVideoSeconds}초 이하로 잘라 만들어요` }, '원본 합계 ', h('b', {}, sec(total))),
+    h('span', { class: 'kpi' }, '게시물 영상 최대 ', h('b', {}, `${D.limits.maxVideoSeconds}초`)),
+    h('span', { class: 'kpi' }, '에셋 ', h('b', {}, D.plan.assets.length)),
+    h('span', { class: `kpi${nMemo ? ' warn' : ''}` }, '고칠 점 ', h('b', {}, nMemo)));
+  $('#speed').replaceChildren(...[1, 2, 3].map((x) => h('button', { class: x === speed ? 'on' : '', style: 'padding:2px 8px;font-size:12px', onclick: () => { speed = x; players.forEach((p) => { p.playbackRate = x; }); render(); } }, `${x}×`)));
   const top = [];
-  if (D.previous) top.push(h('div', { class: 'note full' }, h('b', {}, '지난번 요청'), ` "${D.previous.note ?? '(요청 없음)'}" 이후 다시 찍은 녹화예요. 이전과 지금을 나란히 비교해 보세요.`));
-  if (D.status.next !== 'APPROVAL_PLAN') top.push(h('div', { class: 'note full' }, h('b', {}, '지금은 승인할 수 없어요'), ' — ', D.status.reason));
-  const recs = h('div', { style: 'display:flex;flex-direction:column;gap:14px' }, D.recordings.map(recCard));
-  $('#main').replaceChildren(...top, recs, assetList());
+  if (D.previous) top.push(h('div', { class: 'note full' }, h('b', {}, '지난번 요청'), ` "${D.previous.note ?? '(요청 없음)'}" 이후 다시 찍은 녹화예요. 영상 아래 "이전 녹화"에서 나란히 볼 수 있어요.`));
+  if (review && D.status.next !== 'APPROVAL_PLAN') top.push(h('div', { class: 'note full' }, h('b', {}, '지금은 승인할 수 없어요'), ' — ', D.status.reason));
+  $('#main').replaceChildren(...top, h('div', { class: 'recs' }, D.recordings.map(recCard)), h('aside', { class: 'panel assets', id: 'assets' }));
+  renderAssets();
   renderBar();
 }
 
 const bar = {};
+function noteText() {
+  const lines = memos.filter((m) => m.text.trim() && D.recordings.some((r) => r.name === m.rec)).map((m) => `${m.rec}${m.t != null ? ` ${clock(m.t)}` : ''} — ${m.text.trim()}`);
+  if (bar.extra?.value.trim()) lines.push(bar.extra.value.trim());
+  return lines.join(' / ');
+}
 function buildBar() {
-  bar.note = h('textarea', { placeholder: '고칠 점을 적어요. 예: 버튼 사이 간격을 절반으로, 스크롤은 사람처럼', 'aria-label': '고칠 점' });
-  bar.reject = h('button', { class: 'danger', onclick: () => { const t = bar.note.value.trim(); if (!t) return toast('무엇을 고칠지 적어 주세요', true); decide('reject', { note: t }); } }, icon('pencil-line', 15), ' 거절하고 다시 찍기');
-  bar.approve = h('button', { class: 'primary', onclick: () => decide('approve', { hash: D.hash }) }, icon('check', 16), ' 촬영 계획 승인');
-  bar.count = h('span', { class: 'hint' });
-  $('#bar').replaceChildren(h('div', { class: 'reject' }, h('div', { class: 'row', style: 'flex-wrap:nowrap' }, bar.note, bar.reject)), h('div', { class: 'approve' }, bar.count, bar.approve));
+  bar.summary = h('div', { class: 'summary' });
+  bar.extra = h('input', { type: 'text', placeholder: '그 밖에 고칠 점 (선택)', 'aria-label': '그 밖에 고칠 점', oninput: renderBar });
+  bar.reject = h('button', { class: 'danger', onclick: () => { const t = noteText(); if (!t) return toast('장면에 메모를 남기거나 고칠 점을 적어 주세요', true); decide('reject', { note: t }); } }, icon('refresh-cw', 15), ' 메모 보내고 다시 찍기');
+  bar.approve = h('button', { class: 'primary', onclick: () => decide('approve', { hash: D.hash }) }, icon('check', 16), ' 이대로 승인');
+  $('#bar').replaceChildren(h('div', { class: 'left' }, bar.summary, bar.extra), bar.reject, bar.approve);
 }
 function renderBar() {
   if (!bar.approve) buildBar();
-  const can = D.status.next === 'APPROVAL_PLAN';
-  const all = D.recordings.every((r) => seen.has(r.name));
-  bar.note.disabled = !can; bar.reject.disabled = !can;
-  bar.approve.disabled = !can || !all;
-  bar.count.textContent = `녹화본 확인 ${D.recordings.filter((r) => seen.has(r.name)).length}/${D.recordings.length}${can && !all ? ' · 끝까지 보면 승인할 수 있어요' : ''}`;
+  const can = D.status.next === 'APPROVAL_PLAN' && D.editable;
+  bar.approve.hidden = D.mode !== 'review';
+  const n = memos.filter((m) => m.text.trim() && D.recordings.some((r) => r.name === m.rec)).length + (bar.extra.value.trim() ? 1 : 0);
+  bar.summary.replaceChildren(n ? h('span', {}, h('b', {}, `고칠 점 ${n}개`), ` · ${noteText()}`) : D.mode === 'review' ? '고칠 점이 없으면 이대로 승인. 다시 찍을 곳은 장면 옆 말풍선 버튼으로 메모해요.' : '다시 찍을 곳이 있으면 장면 옆 말풍선 버튼으로 메모해 보내요.');
+  const k = document.querySelector('#sub .kpi:last-child b'); if (k) { k.textContent = n; k.parentElement.classList.toggle('warn', n > 0); }
+  bar.extra.disabled = !D.retake; bar.reject.disabled = !D.retake || n === 0; bar.approve.disabled = !can;
+  // 메모가 있으면 "다시 찍기"가, 없으면 "승인"이 주 버튼이다
+  bar.approve.classList.toggle('primary', n === 0);
+  bar.reject.classList.toggle('primary', n > 0);
+  bar.reject.classList.toggle('danger', n === 0);
 }
 
 async function decide(action, body) {
   try {
     await api('POST', `/api/projects/${P}/${action}/plan`, body);
-    modal(action === 'approve' ? '촬영 계획을 승인했어요' : '고칠 점을 기록했어요',
-      h('p', { style: 'margin:0' }, action === 'approve' ? 'Claude Code에 아래 문장을 말하면 AI가 게시물 파일을 만들어요.' : 'Claude Code에 아래 문장을 말하면 AI가 요청대로 다시 찍어요.'),
+    memos = []; saveMemos();
+    modal(action === 'approve' ? '촬영 계획을 승인했어요' : '고칠 점을 보냈어요',
+      h('p', { style: 'margin:0' }, action === 'approve' ? 'Claude Code에 아래 문장을 말하면 AI가 게시물 파일을 만들어요.' : 'Claude Code에 아래 문장을 말하면 AI가 메모대로 다시 찍어요.'),
       sayBox(`${P} 이어서 해줘`),
       h('div', { class: 'row' }, h('span', { class: 'grow' }), h('a', { href: `/p/${P}/` }, '진행 화면으로')));
     await load();
@@ -129,12 +302,14 @@ async function decide(action, body) {
 async function load() {
   D = await api('GET', `/api/projects/${P}/compare/plan`);
   if (!D.plan) { $('#main').replaceChildren(h('div', { class: 'empty full' }, '아직 녹화 계획이 없어요. 진행 화면에서 지금 할 일을 확인해 주세요.')); return; }
-  $('#title').textContent = `녹화 확인 — ${P}`;
-  document.title = `녹화 확인 · ${P}`;
+  const name = D.mode === 'review' ? '녹화 확인' : '녹화 원본';
+  $('#title').textContent = `${name} — ${P}`;
+  document.title = `${name} · ${P}`;
+  resetDraft();
   render();
 }
 $('#back').href = `/p/${P}/`;
-$('#back').prepend(icon('arrow-left', 15), ' ');
+$('#back').prepend(icon('arrow-left', 14), ' ');
 load().catch((e) => $('#main').replaceChildren(h('div', { class: 'empty bad-text full' }, e.message)));
 </script>
 </body>

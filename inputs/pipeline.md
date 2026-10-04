@@ -1,7 +1,7 @@
 # Pipeline
 
 한 번 실행할 때 `project` 1개를 처리한다 (inputs/purpose.md).
-Phase는 4개이고, 사람 승인이 2번 있다.
+Phase는 4개이고, 사람 승인은 진행 방식(projects.yaml `mode`)에 따라 0~2번이다: auto(기본) 0번, edit 완성본 1번, review 촬영 계획·완성본 2번.
 
 ## Phase
 
@@ -10,10 +10,10 @@ Phase는 4개이고, 사람 승인이 2번 있다.
 | (시작 전) | 1, 2 | 시작 화면(app.mjs), status, explore.mjs, record.mjs | projects.yaml (시작 화면에서 URL로 등록 가능) | 도구·대상 확인. 실패하면 STOP 또는 실행 오류 |
 | P1 촬영 계획 | 3, 4, 5 | planner | 웹 콘텐츠 | plan/plan.json, plan/*.scenario.mjs |
 | P2 녹화 | 6, 7 | record.mjs | plan/ | raw/*.mp4, raw/*.sheet.png, raw/manifest.json |
-| ✋ 승인 1 | — | 사람 (녹화 확인 화면 또는 말) | 에셋 목록, 녹화본, 쓰기 요청 수 | gate/approval-plan.json (run.mjs approve plan) |
+| ✋ 승인 1 (review만) | — | 사람 (녹화 확인 화면 또는 말) | 에셋 목록, 녹화본, 쓰기 요청 수 | gate/approval-plan.json (run.mjs approve plan) |
 | P3 편집값 | 8, 9, 10, 11 | editor | plan/, raw/ | edit/edits.json |
 | P4 내보내기·검토 | 12, 13, 14 | export.mjs → judge.mjs | edits.json, raw/ | export/, gate/p4-gate.json |
-| ✋ 승인 2 | 9, 11, 14 | 사람 (완성본 확인 화면 또는 말. 편집 화면에서 고친 뒤) | export/ | gate/approval-final.json (run.mjs approve final) |
+| ✋ 승인 2 (edit·review) | 9, 11, 14 | 사람 (편집 화면에서 개인 설정을 한 뒤 완성본 확인 화면 또는 말) | export/ | gate/approval-final.json (run.mjs approve final) |
 
 - P1: planner는 `scripts/explore.mjs`로 사이트를 둘러보고, 쓴 시나리오를 `scripts/try.mjs`로 미리 돌려 본 뒤 계획과 시나리오를 넘긴다. 녹화는 오케스트레이터가 `node scripts/record.mjs <project>`로 실행한다.
 - P2: 시나리오·설정이 같은 녹화본은 다시 찍지 않는다. 시나리오가 실행 중 오류를 내면 manifest의 `error`에 남고, status가 P1로 돌려보낸다.
