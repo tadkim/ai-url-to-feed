@@ -71,7 +71,7 @@ Bash는 아래 두 명령과, plan/ 안에서 쓰지 않게 된 자기 파일을
 // 백엔드 쓰기: 없음
 export default {
   cursor: false,   // 조작이 없는 감상용 클립만. 조작이 있으면 이 줄을 뺀다 (가짜 커서가 보인다)
-  scenario: async ({ page, tap, tapVisible, scrollBy, dwell, goto, startCapture, stopCapture }) => {
+  scenario: async ({ page, tap, tapVisible, flick, flickTo, dwell, goto, startCapture, stopCapture }) => {
     // ── 준비: 목표 화면까지 이동 (영상에 포함되지 않음) ──
     await goto('/');
     await page.waitForFunction(() => {
@@ -93,11 +93,12 @@ export default {
 2. 목표 화면까지 가는 준비 과정은 `startCapture()` 앞에 둔다.
 3. `setTimeout`·`waitForTimeout`을 쓰지 않는다. 화면이 다 보였는지는 `page.waitForFunction`·`locator.waitFor`로 이미지 로드와 진입 페이드 완료를 조건으로 기다린다. 사람이 보는 속도 조절은 `dwell(ms)`.
 4. 쓰기 허용 프로젝트(`allow_writes: true`)에서 저장·업로드가 일어나는 시나리오는 맨 위 주석에 `⚠️ 백엔드 쓰기: <무엇이 저장되는지>`를 적는다.
+5. 녹화 중 스크롤은 하네스가 넘겨주는 `flick(px, { at, ms })`·`flickTo(대상)`만 쓴다. `page.mouse.wheel`·`scrollBy`·`behavior: 'smooth'`는 쓰지 않는다 — 스크롤 애니메이션이 화면 캡처와 겹치면 상단 고정 nav가 출렁이며 찍힌다 (stuckyi.studio — 2026-10-05). `startCapture()` 전 준비 단계에서 한 번에 옮길 때는 `page.evaluate(() => scrollTo(0, y))`를 써도 된다.
 
 함정 (이전 프로젝트에서 실제로 겪은 것):
 - 목록 항목은 인덱스로 고르지 않는다. 세션마다 순서가 섞인다. `page.locator('li.item').filter({ hasText: '제목' }).first()`처럼 내용으로 찾는다.
-- `tap()`의 자동 스크롤을 믿지 않는다 (1.2초 제한, 실패해도 무시되어 화면 밖을 누른다). 먼저 직접 올린다:
-  `await card.evaluate((el) => el.scrollIntoView({ behavior: 'smooth', block: 'center' })); await dwell(900); await tap(card.locator('button'));`
+- `tap()`의 자동 스크롤을 믿지 않는다 (1.2초 제한, 실패해도 무시되어 화면 밖을 누른다). 먼저 가운데로 가져온다:
+  `await flickTo(card); await dwell(300); await tap(card.locator('button'));`
 - 같은 버튼을 빠르게 여러 번 누를 때는 첫 번만 `tap()`, 나머지는 `page.evaluate(() => window.__pressCursor?.()); await page.mouse.down(); await dwell(60); await page.mouse.up(); await dwell(260);`
 - 스크롤 뒤 지금 보이는 항목을 누를 때는 `tapVisible('.slot', { top: 140, bottom: 520 })`.
 - 선택자는 aria-label 우선, 클래스는 차선. explore.mjs로 실제 동작을 확인한 것만 쓴다.
@@ -107,17 +108,8 @@ export default {
 ## 속도감 (사람이 확인한 기준, 2026-10-01)
 - 액션 사이 간격은 엔진 기본값의 절반을 기본으로 한다: 조작이 있는 시나리오에 `tapDefaults: { pre: 210, post: 350 }`. 화면을 보여 주려고 멈추는 `dwell`은 0.6~1초. 글자 입력 delay는 80ms.
 - 이미지 에셋으로 뽑을 화면은 전환이 끝난 뒤 최소 0.6초 멈춘다.
-- 스크롤은 등속으로 굴리지 않는다 (기계가 조작하는 것처럼 보인다). 사람이 쓸어 내리듯 빠르게 시작해 느려지며 멈추는 관성 스크롤을 쓰고, 한 번에 다 내리지 않고 2~3번으로 나눠 사이에 0.3~0.5초 쉰다. 이동 거리도 매번 조금 다르게 한다:
-  ```js
-  // total px를 steps 단계로. 앞 3단계 가속, 그 뒤 제곱 곡선으로 감속
-  const flick = async (total, steps = 48) => {
-    const w = Array.from({ length: steps }, (_, i) => (i < 3 ? (i + 1) / 3 : ((steps - i) / (steps - 3)) ** 2));
-    const sum = w.reduce((a, b) => a + b, 0);
-    let sent = 0;
-    for (let i = 0; i < steps; i++) { const d = Math.round((total * w.slice(0, i + 1).reduce((a, b) => a + b, 0)) / sum) - sent; sent += d; if (d) await page.mouse.wheel(0, d); await dwell(8); }
-  };
-  ```
-- 문서가 아니라 안쪽 컨테이너가 스크롤되는 사이트가 많다 (`scroll_height`가 viewport 높이와 같으면 그렇다). 이때는 `scrollBy` 대신 컨테이너 위에 `page.mouse.move`로 마우스를 두고 `page.mouse.wheel`을 쓴다.
+- 스크롤은 `flick(px)`로 한다. 빠르게 시작해 느려지며 멈추는 관성 곡선이 이미 들어 있다. 한 번에 다 내리지 않고 2~3번으로 나눠 사이에 0.3~0.5초 쉬고, 이동 거리도 매번 조금 다르게 한다 (예: `await flick(330); await dwell(800); await flick(470);`). 오래 걸리는 긴 이동은 `ms`를 늘린다 (기본 520).
+- 문서가 아니라 안쪽 컨테이너가 스크롤되는 사이트가 많다 (`scroll_height`가 viewport 높이와 같으면 그렇다). 이때는 `flick(px, { at: [x, y] })`로 그 컨테이너 위의 한 점을 준다.
 - 커서 이동 시간(약 0.4초)과 누르는 시간은 엔진 고정값이라 `pre`를 더 줄여도 줄지 않는다.
 - 한 흐름으로 이어 보여 줄 수 있는 장면은 녹화를 나누지 않고 하나로 잇는다 (예: 첫 화면 스크롤 → 필터 조작).
 

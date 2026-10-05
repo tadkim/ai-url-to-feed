@@ -82,3 +82,60 @@ export async function runSteps(page, steps, baseUrl) {
     else throw new Error(`모르는 단계: ${op}`);
   }
 }
+
+// ---- 녹화 중 스크롤 (시나리오에 flick·flickTo로 넘긴다) ----
+// 헤드리스 브라우저는 스크롤 애니메이션(휠, behavior: 'smooth')이 화면 캡처와 겹치면 고정 헤더(position: fixed·sticky)를
+// 스크롤 양만큼 어긋난 자리로 찍는다 (실측: 고정 헤더만 있는 시험 페이지도 프레임의 30~51%가 흔들림 — 2026-10-05).
+// 그래서 캡처가 끝난 뒤에만, 애니메이션 없이 즉시 옮기고, 화면에 반영된 다음 캡처가 찍히게 한다 (실측: 0~1%).
+// 걸음마다 옮기는 거리는 빠르게 시작해 느려지며 멈추는 관성 곡선을 따른다.
+const SYNC = Symbol('flick');
+export function scrollHelpers(page) {
+  if (!page[SYNC]) {
+    const state = { busy: null };
+    const orig = page.screenshot.bind(page);
+    page.screenshot = (...a) => { const p = orig(...a); state.busy = p.catch(() => {}); return p; };   // 녹화 엔진의 캡처를 감싸 진행 중인지 안다
+    page[SYNC] = state;
+  }
+  const state = page[SYNC];
+  // 스크롤할 대상: at(화면 좌표) 아래에서 실제로 스크롤되는 영역, 없으면 문서. 대상을 window.__flickBox에 둔다
+  const pick = ([x, y]) => {
+    let el = document.elementFromPoint(x, y);
+    const scrolls = (e) => e.scrollHeight > e.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowY);
+    while (el && el !== document.body && el !== document.documentElement && !scrolls(el)) el = el.parentElement;
+    window.__flickBox = el && el !== document.body && el !== document.documentElement ? el : document.scrollingElement;
+  };
+  async function steps(total, ms) {
+    const n = Math.max(6, Math.round(ms / 40));   // 캡처 간격(약 40ms)마다 한 걸음
+    const w = Array.from({ length: n }, (_, i) => (i < 2 ? (i + 1) / 2 : ((n - i) / (n - 2)) ** 2));
+    const sum = w.reduce((a, b) => a + b, 0);
+    let sent = 0;
+    for (let i = 0; i < n; i++) {
+      if (state.busy) await state.busy;   // 캡처가 끝난 뒤에만 옮긴다
+      const d = Math.round((total * w.slice(0, i + 1).reduce((a, b) => a + b, 0)) / sum) - sent;
+      sent += d;
+      await page.evaluate((dy) => { window.__flickBox.scrollBy({ top: dy, behavior: 'instant' }); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); }, d);
+    }
+  }
+  return {
+    // px만큼 관성처럼 스크롤한다. at: 스크롤할 영역 위의 한 점 (안쪽 컨테이너가 스크롤되는 사이트), ms: 걸리는 시간
+    async flick(px, { at = [180, 420], ms = 520 } = {}) {
+      await page.evaluate(pick, at);
+      await steps(px, ms);
+    },
+    // 대상(선택자 문자열 또는 locator)을 화면(또는 그 스크롤 영역) 가운데로 관성 스크롤해 가져온다
+    async flickTo(target, { ms = 520, block = 'center' } = {}) {
+      const loc = typeof target === 'string' ? page.locator(target).first() : target;
+      const dy = await loc.evaluate((el, blk) => {
+        const scrolls = (e) => e.scrollHeight > e.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowY);
+        let box = el.parentElement;
+        while (box && box !== document.body && box !== document.documentElement && !scrolls(box)) box = box.parentElement;
+        window.__flickBox = box && box !== document.body && box !== document.documentElement ? box : document.scrollingElement;
+        const r = el.getBoundingClientRect();
+        const view = window.__flickBox === document.scrollingElement ? { top: 0, height: innerHeight } : window.__flickBox.getBoundingClientRect();
+        const want = blk === 'start' ? view.top + 80 : view.top + view.height / 2 - r.height / 2;
+        return Math.round(r.top - want);
+      }, block);
+      if (Math.abs(dy) > 2) await steps(dy, ms);
+    },
+  };
+}

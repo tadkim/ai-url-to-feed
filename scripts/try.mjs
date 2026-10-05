@@ -11,7 +11,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { record } from 'walkthrough-recorder';
 import { ROOT, loadRules, assertProject, projectConf, loadContext, scenarioErrors, planDir, exists, probe, inspectVideo, activity } from './lib.mjs';
-import { assertTarget, applyContext, ignoreClosedCapture } from './browser.mjs';
+import { assertTarget, applyContext, ignoreClosedCapture, scrollHelpers } from './browser.mjs';
 
 ignoreClosedCapture();
 
@@ -31,7 +31,7 @@ async function tryOne(rules, project, conf, name) {
       record({
         baseUrl: conf.url, outDir: dir, outName: name, viewport: rec.viewport, scale: 1, fps: rec.fps, jpegQuality: 70, crf: 28,
         cursor: mod.cursor ?? {}, tapDefaults: mod.tapDefaults,
-        setupContext: (context) => applyContext(context, rules, conf, counts), scenario: mod.scenario,
+        setupContext: (context) => applyContext(context, rules, conf, counts), scenario: (api) => mod.scenario({ ...api, ...scrollHelpers(api.page) }),
       }),
       new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`시간 초과 — ${rec.max_raw_seconds + 180}초`)), (rec.max_raw_seconds + 180) * 1000); }),
     ]);

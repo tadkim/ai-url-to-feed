@@ -105,7 +105,7 @@ gates:
     on_fail: P1
   scenario_rules:
     phase: P1
-    check: "시나리오마다 export default와 startCapture()가 있다. setTimeout·waitForTimeout·record() 직접 호출·viewport/scale 지정이 없다. 쓰기 허용 프로젝트는 맨 위 주석에 '쓰기' 경고가 있다"
+    check: "시나리오마다 export default와 startCapture()가 있다. setTimeout·waitForTimeout·record() 직접 호출·viewport/scale 지정이 없다. 스크롤은 flick·flickTo만 (휠·scrollBy·smooth 스크롤은 캡처와 겹쳐 고정 헤더가 흔들린다 — 2026-10-05). 쓰기 허용 프로젝트는 맨 위 주석에 '쓰기' 경고가 있다"
     on_fail: P1
   approval_plan:
     phase: P1

@@ -5,7 +5,8 @@
 //     // 백엔드 쓰기: 없음            ← 맨 위 주석. 쓰기가 일어나면 경고를 적는다
 //     export default {
 //       cursor: false,                 // 조작이 없는 감상용 클립. 생략하면 가짜 커서를 보인다
-//       scenario: async ({ page, tap, tapVisible, scrollBy, dwell, goto, startCapture, stopCapture }) => { ... },
+//       scenario: async ({ page, tap, tapVisible, flick, flickTo, dwell, goto, startCapture, stopCapture }) => { ... },
+//   스크롤은 flick(px)·flickTo(대상)만 쓴다 (browser.mjs scrollHelpers). 휠·smooth 스크롤은 캡처와 겹쳐 고정 헤더가 흔들린다
 //     };
 //   viewport·배율·품질·출력 위치는 rules.yaml record 값으로 고정한다. 시나리오가 바꾸지 못한다.
 // 출력: raw/<name>.mp4 (viewport x scale), raw/<name>.sheet.png (컨택트 시트), raw/manifest.json
@@ -19,7 +20,7 @@ import {
   loadRules, assertProject, projectConf, loadContext, planErrors, scenarioErrors, planDir, recordHash, derivedPath, runPath,
   readIf, readText, writeJson, exists, sha, fileSha, now, probe, appendLog, inspectVideo, engineSettings, markBusy,
 } from './lib.mjs';
-import { assertTarget, applyContext, ignoreClosedCapture } from './browser.mjs';
+import { assertTarget, applyContext, ignoreClosedCapture, scrollHelpers } from './browser.mjs';
 
 ignoreClosedCapture();
 
@@ -69,7 +70,7 @@ async function main() {
         cursor: mod.cursor ?? {}, tapDefaults: mod.tapDefaults,
         observe: (conf.observe ?? []).map((s) => new RegExp(s)),
         setupContext: (context) => applyContext(context, rules, conf, counts),
-        scenario: mod.scenario,
+        scenario: (api) => mod.scenario({ ...api, ...scrollHelpers(api.page) }),   // flick·flickTo: 캡처와 겹치지 않는 스크롤
       }), (rec.max_raw_seconds + 180) * 1000, `시간 초과 — 준비 + 녹화가 ${rec.max_raw_seconds + 180}초를 넘었다`);
       fs.renameSync(made, path.join(rawDir, file));
       const p = probe(path.join(rawDir, file));

@@ -347,6 +347,8 @@ export function scenarioErrors(ctx) {
     if (/\brecord(Clips)?\s*\(|from\s+['"]walkthrough-recorder['"]/.test(code)) errs.push(`${f}: record()를 직접 부르지 않는다 (record.mjs가 실행한다)`);
     if (/\b(viewport|scale|deviceScaleFactor|outDir|baseUrl)\s*:/.test(code)) errs.push(`${f}: viewport·scale·outDir·baseUrl을 지정하지 않는다 (rules.yaml 값으로 고정)`);
     if (/\bfs\b|node:fs|child_process|process\.env/.test(code)) errs.push(`${f}: 파일·프로세스·환경변수에 접근하지 않는다`);
+    // 스크롤 애니메이션이 화면 캡처와 겹치면 고정 헤더가 어긋나 찍힌다 (browser.mjs scrollHelpers 주석) — 하네스의 flick·flickTo만 쓴다
+    if (/\.wheel\s*\(|\bscrollBy\s*\(|behavior\s*:\s*['"`]smooth/.test(code)) errs.push(`${f}: 스크롤은 flick(px)·flickTo(대상)만 쓴다 (휠·scrollBy·smooth 스크롤은 캡처와 겹쳐 고정 헤더가 흔들린다)`);
     if (conf.allow_writes && !/쓰기/.test(head)) errs.push(`${f}: 쓰기 허용 프로젝트 — 맨 위 주석에 백엔드 쓰기 여부("쓰기")를 적는다`);
   }
   return errs;

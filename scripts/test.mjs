@@ -76,8 +76,10 @@ eq(L.planErrors(ctx), [], '계획 통과');
 eq(L.scenarioErrors(ctx), [], '시나리오 통과');
 
 // 시나리오 규칙 위반
-const badCases = { 'startCapture 없음': "    await goto('/');", 'setTimeout': `${good}\n    await new Promise((r) => setTimeout(r, 500));`, 'waitForTimeout': `${good}\n    await page.waitForTimeout(500);`, 'viewport 지정': `${good}\n    const o = { viewport: 1 };` };
+const badCases = { 'startCapture 없음': "    await goto('/');", 'setTimeout': `${good}\n    await new Promise((r) => setTimeout(r, 500));`, 'waitForTimeout': `${good}\n    await page.waitForTimeout(500);`, 'viewport 지정': `${good}\n    const o = { viewport: 1 };`, '휠 스크롤': `${good}\n    await page.mouse.wheel(0, 300);`, 'scrollBy': `${good}\n    await scrollBy('main', 300);`, 'smooth 스크롤': `${good}\n    await page.evaluate(() => scrollTo({ top: 300, behavior: 'smooth' }));` };
 for (const [name, body] of Object.entries(badCases)) { write('plan/flat.scenario.mjs', scenario(body)); ok(L.scenarioErrors(L.loadContext(rules, P)).length > 0, `시나리오 규칙: ${name}`); }
+write('plan/flat.scenario.mjs', scenario(`${good}\n    await flick(300);\n    await flickTo('main p');\n    await page.evaluate(() => scrollTo(0, 0));`));
+eq(L.scenarioErrors(L.loadContext(rules, P)), [], '시나리오 규칙: flick·flickTo와 준비용 scrollTo는 된다');
 write('plan/flat.scenario.mjs', "import { record } from 'walkthrough-recorder';\nawait record({ scenario: async ({ startCapture }) => { startCapture(); } });\n");
 ok(L.scenarioErrors(L.loadContext(rules, P)).length > 0, '시나리오 규칙: record() 직접 호출');
 write('plan/flat.scenario.mjs', scenario(good));
@@ -335,6 +337,25 @@ eq(['stuckyi.studio', 'https://a.com', 'localhost:3000', '127.0.0.1:4400/app', '
 node('run.mjs', 'begin', P, 'P3');
 fs.writeFileSync(path.join(TMP, P, 'plan', 'plan.json'), JSON.stringify(plan));
 eq(node('run.mjs', 'end', P, 'P3').code, 1, 'editor가 plan/을 고치면 FAIL');
+
+// 녹화 중 스크롤 도우미 (browser.mjs scrollHelpers): 정확한 거리, 안쪽 스크롤 영역, 대상을 가운데로
+{
+  const { chromium } = await import('playwright');
+  const { scrollHelpers } = await import('./browser.mjs');
+  const b = await chromium.launch();
+  const page = await b.newPage({ viewport: { width: 360, height: 640 } });
+  await page.setContent(`<style>body{margin:0}header{position:fixed;top:0;height:50px;width:100%;background:#eee}main p{height:100px;margin:0 0 20px}#box{position:fixed;top:300px;left:0;width:360px;height:200px;overflow-y:auto}#box div{height:1000px}</style>
+    <header></header><main>${'<p></p>'.repeat(40)}<p id="t">대상</p>${'<p></p>'.repeat(10)}</main><section id="box"><div></div></section>`);
+  const S = scrollHelpers(page);
+  await S.flick(500, { at: [180, 150] });
+  eq(await page.evaluate(() => scrollY), 500, '스크롤 도우미: flick은 정한 거리만큼 문서를 스크롤한다');
+  await S.flick(300, { at: [180, 400] });
+  eq(await page.evaluate(() => [scrollY, document.querySelector('#box').scrollTop]), [500, 300], '스크롤 도우미: 그 점 아래의 안쪽 스크롤 영역만 스크롤한다');
+  await S.flickTo('#t');
+  const mid = await page.evaluate(() => { const r = document.querySelector('#t').getBoundingClientRect(); return Math.round(r.top + r.height / 2); });
+  ok(Math.abs(mid - 320) <= 3, '스크롤 도우미: flickTo는 대상을 화면 가운데로 가져온다', String(mid));
+  await b.close();
+}
 
 // 삭제: 진행 중인 명령줄·Claude Code 묶음·녹화 프로세스를 멈추고, 등록·기록·캐시를 지운다. 게시물만 남길 수도 있다
 {
