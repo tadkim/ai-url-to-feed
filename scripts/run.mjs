@@ -49,13 +49,17 @@ export function status(rules, project) {
     if (after(st.unblocked_at, st.done.P1)) return { next: 'P1', todo: 'agent', reason: '촬영 계획 거절 — 사람 요청을 planner에게 다시 넘긴다', notes: st.plan_notes.slice(-1) };
     return { next: 'STOP', reason: 'planner가 거절 요청을 반영하지 못했다 (계획·시나리오가 거절 때와 같다). 요청을 더 구체적으로 다시 거절하거나 "계속 진행해"', notes: st.plan_notes.slice(-1) };
   }
+  // 게이트 FAIL로 planner를 다시 돌린다. 사이트가 계속 실패해도 끝없이 돌지 않게 retry.plan_fail_to_p1번 고친 뒤에는 사람에게 묻는다
+  const rework = (reason, f) => (st.p1_rework_runs >= rules.retry.plan_fail_to_p1
+    ? { next: 'STOP', reason: `planner가 ${st.p1_rework_runs}번 고쳤지만 ${reason} — retry.plan_fail_to_p1(${rules.retry.plan_fail_to_p1}) 초과`, failing: f }
+    : { next: 'P1', todo: 'agent', reason, failing: f });
   let f = failing('P1');
-  if (f.length) return { next: 'P1', todo: 'agent', reason: 'P1 게이트 FAIL', failing: f };
+  if (f.length) return rework('P1 게이트 FAIL', f);
 
   // P2 녹화
   if (ctx.raw?.record_hash !== recordHash(rules, project)) return { next: 'P2', todo: 'record', reason: '계획·시나리오가 바뀐 뒤 녹화하지 않음 — record.mjs' };
   f = failing('P2');
-  if (f.length) return { next: 'P1', todo: 'agent', reason: 'P2 게이트 FAIL — 시나리오를 고친다', failing: f };
+  if (f.length) return rework('P2 게이트 FAIL — 시나리오를 고친다', f);
 
   // 승인 1: 에셋 목록 + 녹화본 (review 모드만). auto·edit 모드는 녹화가 끝난 시점을 승인 시점으로 본다
   const mode = ctx.conf.mode;
@@ -141,6 +145,11 @@ function begin(rules) {
   if (!agent) throw new Error(`phase는 ${Object.values(rules.agents).flatMap((a) => a.phases).join(' | ')} (나머지는 스크립트가 실행): ${phaseArg}`);
   const file = scopeFile(project, phaseArg);
   if (exists(file)) throw new Error(`이미 실행 중으로 기록됨: ${file} — 이전 실행을 end로 닫거나 파일을 지운다`);
+  // planner 재작업 횟수: 게이트 FAIL로 다시 도는 것만 센다. 새 계획(처음·거절)이나 P3로 넘어가면 0. 스냅샷보다 먼저 쓴다
+  const st = loadState(rules, project);
+  const s = phaseArg === 'P1' ? status(rules, project) : null;
+  st.p1_rework_runs = s?.next === 'P1' && s.failing?.length ? st.p1_rework_runs + 1 : 0;
+  saveState(rules, project, st);
   appendLog(rules, project, { event: 'begin', phase: phaseArg, agent });   // 스냅샷보다 먼저 써야 자기 로그가 변경으로 잡히지 않는다
   // 명령줄(cli.mjs)이 띄운 실행이면 그 프로세스 번호를 남긴다. 명령줄이 중간에 멈추면(Ctrl+C) 끊긴 기록으로 알아보고 정리한다
   const snap = { project, phase: phaseArg, agent, started_at: now(), owner_pid: Number(process.env.HARNESS_CLI_PID) || undefined, files: snapshot() };
@@ -217,6 +226,7 @@ function unblock(rules) {
   st.plan_rejects = Math.min(st.plan_rejects, rules.retry.plan_reject);
   st.final_rejects = Math.min(st.final_rejects, rules.retry.final_reject);
   st.p3_invalid_runs = 0;
+  st.p1_rework_runs = 0;
   saveState(rules, project, st);
   appendLog(rules, project, { event: 'unblock' });
   console.log(JSON.stringify({ unblocked_at: st.unblocked_at, ...status(rules, project) }, null, 2));

@@ -191,6 +191,7 @@ async function drive(project, phrase) {
   fs.writeFileSync(eventFile, '');
   const t0 = Date.now();
   const usage = { runs: 0, cost: 0, turns: 0 };   // Claude Code 사용량 (실행마다 더한다)
+  const budget = rules0.cli?.budget_usd;   // 이 명령 한 번에 쓸 수 있는 금액. 여러 번 띄우면 남은 금액만 넘긴다
   const cur = { i: null, label: STEPS[0], text: '', since: t0 };   // i는 첫 확인 때 정한다 (이어서 할 때 이미 끝난 단계는 다시 찍지 않는다)
   let frame = 0;
   let lastLine = '';
@@ -228,11 +229,13 @@ async function drive(project, phrase) {
       // 결과는 JSON 한 덩어리(사용량 포함)로 받는다. 보고 글은 기록 파일에 남긴다
       // Claude Code를 자기 프로세스 묶음으로 띄운다 (Windows 제외). 멈출 때 그 아래 도구·브라우저까지 묶음째 끄려고
       const group = process.platform !== 'win32';
-      const child = spawn('claude', ['-p', text, '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', 'pipe', fd], detached: group, env: { ...process.env, HARNESS_CLI_PID: String(process.pid) } });
+      const limit = budget ? ['--max-budget-usd', (budget - usage.cost).toFixed(2)] : [];
+      const child = spawn('claude', ['-p', text, '--output-format', 'json', '--permission-mode', 'acceptEdits', ...limit, '--allowedTools', ...allowed()], { cwd: ROOT, stdio: ['ignore', 'pipe', fd], detached: group, env: { ...process.env, HARNESS_CLI_PID: String(process.pid) } });
       markCli(project, group ? child.pid : null);
       const killChild = () => { try { if (group) process.kill(-child.pid, 'SIGTERM'); else child.kill('SIGTERM'); } catch { /* 이미 끝났다 */ } };
       process.once('exit', killChild);   // 명령줄이 어떤 이유로 끝나든 Claude Code가 남지 않게
       let stdout = '';
+      let overBudget = false;
       child.stdout.on('data', (d) => { stdout += d; });
       const stop = (sig) => { killChild(); wrapOn(); if (sig === 'SIGTERM') process.exit(143); if (isTTY) process.stdout.write('\n'); say(`\n멈췄어요. 이어서 하려면 같은 명령을 다시 실행해요. 기록: ${path.relative(process.cwd(), logFile)}`); process.exit(130); };
       process.once('SIGINT', stop);
@@ -243,6 +246,7 @@ async function drive(project, phrase) {
       try {
         const r = JSON.parse(stdout);
         Object.assign(usage, { runs: usage.runs + 1, cost: usage.cost + (r.total_cost_usd ?? 0), turns: usage.turns + (r.num_turns ?? 0) });
+        overBudget = r.subtype === 'error_max_budget_usd' || (!!budget && usage.cost >= budget);
         fs.appendFileSync(logFile, `${r.result ?? ''}\n(사용량 $${(r.total_cost_usd ?? 0).toFixed(2)}, ${r.num_turns}턴, ${Math.round((r.duration_ms ?? 0) / 1000)}초)\n`);
       } catch { fs.appendFileSync(logFile, stdout); }
       clearInterval(timer);
@@ -260,6 +264,15 @@ async function drive(project, phrase) {
         if (s.next === 'DONE') { printDone(project, s, Date.now() - t0, usage); return 0; }
         if (s.next === 'STOP') { printStop(s, project); say(dim(`  ${usageText(usage).replace(/^ · /, '')}`)); return 1; }
         return 'approval';
+      }
+      if (overBudget) {
+        clearInterval(spinner);
+        if (isTTY) process.stdout.write('\n');
+        wrapOn();
+        say(`\n${red(bold('멈췄어요'))}  Claude Code 사용량이 이 명령의 상한 $${budget}에 닿았어요 (rules.yaml cli.budget_usd)`);
+        say(dim(`  ${usageText(usage).replace(/^ · /, '')} · 아직 ${s.next} 단계`));
+        say(dim(`  이어서 하려면: npx ai-url-to-feed continue ${project} (명령마다 상한을 새로 세요)`));
+        return 1;
       }
       above(dim(`  Claude Code가 끝났지만 아직 ${s.next} 단계예요 (종료 코드 ${code}). 이어서 진행해요 (${attempt}/3)`));
     }

@@ -36,8 +36,8 @@ Phase는 4개이고, 사람 승인은 진행 방식(projects.yaml `mode`)에 따
 
 | 조건 | 돌아갈 곳 | 최대 횟수 | 넘으면 |
 |---|---|---|---|
-| P1 게이트 FAIL | P1 (planner) | — | — |
-| P2 게이트 FAIL (시나리오 오류) | P1 (manifest의 error를 planner에게) | — | — |
+| P1 게이트 FAIL | P1 (planner) | `retry.plan_fail_to_p1` (P2와 합쳐 센다) | STOP |
+| P2 게이트 FAIL (시나리오 오류) | P1 (manifest의 error를 planner에게) | `retry.plan_fail_to_p1` | STOP |
 | 승인 1 거절 | P1 | `retry.plan_reject` | STOP |
 | P4 게이트 FAIL | P3 (실패 게이트와 detail을 editor에게) | `retry.p4_fail_to_p3` | STOP |
 | 승인 2 거절 | P3 (사람 요청을 editor에게) | `retry.final_reject` | STOP |

@@ -253,7 +253,7 @@ export function loadState(rules, project) {
   return {
     plan_rejects: 0, plan_notes: [], plan_rejected_at: null, plan_rejected_hash: null,
     final_rejects: 0, final_notes: [], final_rejected_at: null, final_rejected_edits: null,
-    approved_plan_at: null, approved_final_at: null, unblocked_at: null, p3_invalid_runs: 0, done: {},
+    approved_plan_at: null, approved_final_at: null, unblocked_at: null, p3_invalid_runs: 0, p1_rework_runs: 0, done: {},
     ...(readIf(stateFile(rules, project), true) ?? {}),
   };
 }

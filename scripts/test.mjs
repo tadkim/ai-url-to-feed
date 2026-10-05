@@ -89,7 +89,17 @@ planBad((p) => { p.assets.pop(); return p; }, '에셋 수 부족');
 planBad((p) => { p.assets[2].type = 'video'; return p; }, '화면 2개 영상');
 planBad((p) => { p.assets[1].n = 7; return p; }, '번호 불연속');
 planBad((p) => { p.assets[0].sources = ['nope']; return p; }, '없는 녹화본');
+// planner 재작업 한도: 게이트 FAIL로 다시 돈 횟수를 세고, 한도를 넘으면 멈춘다
+write('plan/plan.json', JSON.stringify({ ...plan, assets: plan.assets.slice(0, 4) }));
+setState({ done: { P1: L.now() } });
+eq([status().next, status().failing?.length > 0], ['P1', true], 'P1 게이트 FAIL → planner 다시');
+for (let i = 0; i < rules.retry.plan_fail_to_p1; i++) { node('run.mjs', 'begin', P, 'P1'); node('run.mjs', 'end', P, 'P1'); }
+eq([L.loadState(rules, P).p1_rework_runs, status().next], [rules.retry.plan_fail_to_p1, 'STOP'], 'planner가 한도만큼 고쳐도 FAIL이면 멈춘다');
+eq(node('run.mjs', 'unblock', P).json?.next, 'P1', '계속 진행해 → planner 다시');
 write('plan/plan.json', JSON.stringify(plan, null, 2));
+node('run.mjs', 'begin', P, 'P1'); node('run.mjs', 'end', P, 'P1');
+eq(L.loadState(rules, P).p1_rework_runs, 0, '게이트 FAIL이 아닌 planner 실행은 재작업 횟수를 0으로');
+setState({ unblocked_at: null, done: { P1: null } });
 
 setState({ done: { P1: L.now() } });
 eq([status().next, status().todo], ['P2', 'record'], 'P1 뒤 녹화');

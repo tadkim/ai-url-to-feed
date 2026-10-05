@@ -23,6 +23,7 @@
 
 기본 사용 방식이다. 사람이 터미널에서 주소를 넣으면 cli.mjs가 projects.yaml에 등록하고(`bg`, `asset_count`, `mode`), 이 폴더에서 `claude -p "<project> 하네스 시작해줘"`(다음부터 "이어서 해줘")를 `--permission-mode acceptEdits`로 띄운다.
 - 그렇게 불린 세션도 아래 루프를 그대로 따른다. 사람에게 묻지 않는다 (답할 사람이 없다). 승인 단계(APPROVAL_*)나 STOP에 닿으면 보고하고 끝낸다. cli.mjs가 status를 보고 편집 화면을 열거나 사람에게 알린다.
+- 명령 한 번에 쓸 수 있는 Claude Code 사용량은 rules.yaml `cli.budget_usd`까지다 (`--max-budget-usd`로 넘긴다). 닿으면 그 자리에서 끝나고, cli.mjs가 다시 띄우지 않고 `continue`를 안내한다.
 - 허용 목록(.claude/settings.json)에 없는 명령은 거절된다. 하네스 스크립트와 Read·Write·Edit·에이전트로만 진행한다.
 - `npx ai-url-to-feed retake <p> "<요청>"`은 사람이 친 다시 찍기 요청이다 (cli.mjs가 `run.mjs reject <p> plan --note`로 기록한다).
 - `npx ai-url-to-feed continue <p>`는 사람이 친 "계속 진행해"다 (STOP이면 cli.mjs가 `run.mjs unblock`을 기록하고 이어서 한다).
