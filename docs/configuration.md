@@ -2,88 +2,41 @@
 
 [← README](../README.md)
 
-설정 파일은 두 개예요.
+> **이 문서는**
+> - 사이트별 배경색·게시물 수·진행 방식을 바꾸거나, 저장 장면까지 찍어야 하는 사람을 위한 문서예요
+> - 사이트별 설정은 `projects.yaml`이고, 명령줄 옵션(`--bg`, `--count`, `--edit`)이 그대로 여기에 적혀요
+> - 모든 사이트에 공통인 규격은 `rules.yaml`이에요. 보통 바꿀 일이 없어요
+> - `projects.yaml`은 git에 올라가지 않아요
 
-| 파일 | 무엇을 정하나 | git |
-|---|---|---|
-| `projects.yaml` | 녹화할 사이트 (프로젝트마다) | 올라가지 않아요 |
-| `rules.yaml` | 게시물 규격과 검사 기준 (모든 프로젝트 공통) | 올라가요 |
+## projects.yaml (사이트별)
 
-## projects.yaml
-
-명령줄(`npx ai-url-to-feed <주소>`)이나 시작 화면에 주소를 넣으면 자동으로 만들어지고 항목이 추가돼요. 직접 고칠 때는 `projects.example.yaml`을 참고해요.
-
-배포된 사이트는 주소 한 줄이면 돼요. 명령줄과 시작 화면이 쓰는 형식도 이것과 같아요.
+처음 명령을 실행하면 자동으로 만들어져요. 주소 한 줄이면 돼요.
 
 ```yaml
 projects:
-  my-site:                         # 프로젝트 이름 (영문 소문자·숫자·-)
-    url: https://example.com       # 사이트 주소. 끝에 "/" 없이
+  stuckyi:                       # 프로젝트 이름 (주소로 정해져요)
+    url: https://stuckyi.studio
 ```
 
 필요할 때만 더 적어요.
 
-| 항목 | 언제 | 값 | 기본값 |
+| 항목 | 명령줄 옵션 | 값 | 없으면 |
 |---|---|---|---|
-| `mode` | 진행 방식을 바꿀 때 | `edit`(자동으로 만든 뒤 다듬고 한 번 승인) · `review`(녹화·완성본 둘 다 승인) | `auto` (승인 없이 끝까지) |
-| `bg` | 배경색을 정할 때 | `"#B987FF"`. AI가 이 색을 쓰고, 자동 검사가 확인해요. 편집 화면에서 직접 바꾼 색이 있으면 그 색이 이겨요 | 없음 (AI가 사이트와 잘 구분되는 색을 골라요) |
-| `title` | 내 컴퓨터의 개발 서버일 때 (필수) | 그 페이지의 `<title>`. 다른 앱을 녹화하는 실수를 막아요 | 검사 안 함 |
-| `target` | 내 컴퓨터의 개발 서버일 때 | `local` (서버를 먼저 띄워 둬요) | `deployed` |
-| `allow_writes` | 저장·업로드 장면까지 찍어야 할 때 | `true` | `false` (저장 요청을 막아요) |
-| `allow_post` | 읽기에 POST를 쓰는 사이트라 목록·본문이 비어 찍힐 때 | 통과시킬 주소 정규식 목록 | 없음 (Firestore 읽기·Algolia 검색은 기본 통과) |
-| `asset_count` | 에셋 수를 바꿀 때 | `[5, 7]` (최소, 최대) | `[5, 10]` |
-| `max_video_seconds` | 영상 최대 길이를 바꿀 때 | `15` | `20` |
+| `bg` | `--bg=#B987FF` | `"#B987FF"`. AI가 이 색을 쓰고 자동 검사가 확인해요 | AI가 사이트와 잘 구분되는 색을 골라요 |
+| `asset_count` | `--count=6` · `--count=5-8` | `[6, 6]` · `[5, 8]` | 5~10개 |
+| `mode` | `--edit` · `--auto` | `edit`: 다 만든 뒤 [편집 화면](editor.md)(작업 중)에서 다듬고 승인 | 승인 없이 끝까지 |
+| `allow_writes` | — | `true`: 저장·업로드 장면까지 찍어요 | 저장 요청을 막고 찍어요 |
+| `allow_post` | — | 데이터를 읽을 때도 POST를 쓰는 사이트에서 통과시킬 주소 정규식 목록 | Firestore 읽기·Algolia 검색만 통과 |
 
-### 명령줄 옵션과 같은 항목
+명령줄 옵션(`--bg`, `--count`)은 같은 주소로 바꿔 다시 실행하면 그 설정으로 다시 만들어요. `allow_writes`·`allow_post`는 녹화 전에 적어 둬야 해요 (이미 만든 녹화본에는 반영되지 않아요).
 
-명령줄 옵션은 이 파일에 그대로 적혀요. 같은 주소로 옵션을 바꿔 다시 실행하면 값이 바뀌고, 그 설정으로 다시 만들어요.
+## rules.yaml (공통)
 
-| 명령줄 | projects.yaml |
+| 항목 | 기본값 |
 |---|---|
-| `--bg=#B987FF` | `bg: "#B987FF"` |
-| `--count=6` · `--count=5-8` | `asset_count: [6, 6]` · `[5, 8]` (기본 5~10이면 줄을 지워요) |
-| `--edit` · `--auto` | `mode: edit` · 줄을 지워요 (기본 auto) |
-| `--local --title="내 앱"` | `target: local`, `title: 내 앱` |
+| `assets.canvas` 게시물 크기 | 1080×1440 (3:4) |
+| `assets.count` 게시물 수 | 5~10개 |
+| `export.video.max_seconds` 영상 최대 길이 | 20초 |
+| `record.viewport`, `record.scale` 녹화 화면 | 360×640, 3배 |
 
-```bash
-npx ai-url-to-feed stuckyi.studio --bg=#FDE68A --count=6   # 노란 배경, 게시물 6개로 다시 만들기
-```
-
-### 예: 내 컴퓨터의 개발 서버
-
-```yaml
-projects:
-  my-app:
-    url: http://localhost:4400
-    title: 내 앱                   # 브라우저 탭 제목 그대로
-    target: local
-```
-
-서버를 먼저 띄운 뒤 시작해요 (`npx ai-url-to-feed localhost:4400 --title="내 앱"`). 같은 포트에 다른 앱이 떠 있으면 `title`이 달라 녹화 전에 멈춰요. `--title`을 빼면 지금 떠 있는 페이지의 제목을 적어요.
-
-### 예: 저장 장면까지 녹화
-
-```yaml
-projects:
-  my-site:
-    url: https://example.com
-    allow_writes: true
-```
-
-기본값(`false`)에서는 글 등록·업로드 같은 저장 요청과 방문 통계 요청을 막고 녹화해요. `true`로 바꾸면 막지 않고, 어떤 요청이 몇 번 나갔는지 녹화 원본 화면에 보여 줘요.
-
-## rules.yaml
-
-모든 프로젝트에 공통인 숫자예요. 고친 뒤에는 `npm test`를 다시 돌려요.
-
-| 항목 | 뜻 | 기본값 |
-|---|---|---|
-| `assets.canvas` | 게시물 크기 | 1080×1440 (3:4) |
-| `assets.count` | 에셋 수 | 5~10개 |
-| `assets.layouts` | 화면 1·2·3개 배치의 크기와 위치 | 648×1152 · 432×768 · 324×576 |
-| `record.viewport`, `record.scale` | 녹화 화면 크기와 배율 | 360×640, 3배 (바꾸지 않아요) |
-| `record.read_post` | 저장 요청을 막을 때도 통과시키는 읽기 전용 POST | Firestore 읽기, Algolia 검색 |
-| `export.video.max_seconds` | 영상 최대 길이 | 20초 |
-| `style.default` | 테두리·모서리 기본값 (배경색은 `bg`가 없을 때 AI가 골라요) | 테두리 `#444444` 2px, 모서리 0 |
-| `retry` | 거절·검사 실패를 몇 번까지 다시 할지 | 5 · 5 · 2 |
-| `review.port` | 시작 화면·편집 화면 포트 | 4455 (쓰이고 있으면 다음 빈 포트) |
+고친 뒤에는 `npm test`로 하네스 자체 검사를 다시 돌려요.
