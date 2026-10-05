@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
-import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, runningCli, clearStaleAgents, stateDir, activityText, markCli } from './lib.mjs';
+import { ROOT, RUNS, loadRules, assertProject, projectConf, loadState, progress, toolProblems, runningAgent, runningTask, runningCli, clearStaleAgents, stateDir, activityText, markCli, unmarkCli } from './lib.mjs';
 import { addProject, projectSummary, deleteProject } from './projects.mjs';
 import readline from 'node:readline/promises';
 import { status } from './run.mjs';
@@ -276,7 +276,7 @@ async function drive(project, phrase) {
       }
       above(dim(`  Claude Code가 끝났지만 아직 ${s.next} 단계예요 (종료 코드 ${code}). 이어서 진행해요 (${attempt}/3)`));
     }
-  } finally { clearInterval(spinner); wrapOn(); }
+  } finally { clearInterval(spinner); wrapOn(); unmarkCli(project); }   // 이 뒤에 편집 화면을 띄워도 진행 중으로 남지 않게
   if (isTTY) process.stdout.write('\n');
   say(red(`세 번 이어서 했지만 끝나지 않았어요. 기록: ${path.relative(process.cwd(), logFile)}`));
   return 1;

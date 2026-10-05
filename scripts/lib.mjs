@@ -704,7 +704,12 @@ export function markCli(project, child = null) {
   fs.mkdirSync(path.dirname(f), { recursive: true });
   const prev = readIf(f, true);
   fs.writeFileSync(f, JSON.stringify({ pid: process.pid, started_at: prev?.pid === process.pid ? prev.started_at : now(), child }));
-  process.on('exit', () => { try { if (JSON.parse(fs.readFileSync(f, 'utf8')).pid === process.pid) fs.rmSync(f); } catch { /* 이미 없다 */ } });
+  if (!cliMarked.has(project)) { cliMarked.add(project); process.on('exit', () => unmarkCli(project)); }
+}
+const cliMarked = new Set();
+// Claude Code가 끝나면 바로 지운다. 명령줄이 그 뒤 편집 화면을 띄워 두고 있어도 "진행 중"으로 보이지 않게
+export function unmarkCli(project) {
+  try { if (JSON.parse(fs.readFileSync(cliFile(project), 'utf8')).pid === process.pid) fs.rmSync(cliFile(project)); } catch { /* 이미 없다 */ }
 }
 export function runningCli(project) {
   const s = readIf(cliFile(project), true);

@@ -43,6 +43,7 @@ record:
   sheet_max_tiles: 32                 # 넘으면 간격을 늘린다
   scene_threshold: 0.25               # 장면 전환 검출 (ffmpeg scene)
   matrix: bt601                       # 녹화본의 YUV 행렬. 엔진이 JPEG 프레임을 태그 없이 인코딩한다
+  eager_images_px: 4000               # 지연 로딩 이미지를 화면 이만큼 앞에서 불러온다 (스크롤 직후 흐린 자리표시로 버벅이지 않게 — 2026-10-05). 0이면 끈다
   # 쓰기 차단(allow_writes: false)에서도 통과시키는 읽기 전용 POST. 막으면 내용이 빈 화면으로 찍힌다 (Firestore 사이트 — 2026-10-03)
   # 쓰기 요청(Firestore/Write 등)은 여기 넣지 않는다. 사이트별 예외는 projects.yaml <p>.allow_post
   read_post:

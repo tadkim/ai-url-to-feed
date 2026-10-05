@@ -343,6 +343,15 @@ eq(['stuckyi.studio', 'https://a.com', 'localhost:3000', '127.0.0.1:4400/app', '
   eq(L.clearStaleAgents(rules, P, { all: true }), ['P1'], '끊긴 기록: continue는 표시가 없는 기록도 정리한다');
 }
 
+// 명령줄 진행 표시: Claude Code가 끝나면 지운다 (명령줄이 편집 화면을 띄워 두고 살아 있어도 "진행 중"이 아니다)
+{
+  L.markCli(P);
+  L.markCli(P, 123);
+  eq(L.runningCli(P)?.child, 123, '명령줄 표시: 진행 중');
+  L.unmarkCli(P);
+  eq(L.runningCli(P), null, '명령줄 표시: Claude Code가 끝나면 진행 중이 아니다');
+}
+
 // 편집 범위
 node('run.mjs', 'begin', P, 'P3');
 fs.writeFileSync(path.join(TMP, P, 'plan', 'plan.json'), JSON.stringify(plan));
@@ -364,6 +373,17 @@ eq(node('run.mjs', 'end', P, 'P3').code, 1, 'editor가 plan/을 고치면 FAIL')
   await S.flickTo('#t');
   const mid = await page.evaluate(() => { const r = document.querySelector('#t').getBoundingClientRect(); return Math.round(r.top + r.height / 2); });
   ok(Math.abs(mid - 320) <= 3, '스크롤 도우미: flickTo는 대상을 화면 가운데로 가져온다', String(mid));
+  // 지연 로딩 이미지는 화면 앞에서 미리 불러오고, 글이 화면에 들어올 때 나타나는 효과는 그대로 둔다 (browser.mjs eagerImages)
+  const { eagerImages } = await import('./browser.mjs');
+  const p2 = await b.newPage({ viewport: { width: 360, height: 640 } });
+  await p2.addInitScript(eagerImages, 2000);
+  await p2.goto(`data:text/html,${encodeURIComponent(`<body style="margin:0"><div style="height:1500px"></div><img id="i" data-src="x.png"><p id="t">글</p><script>
+    window.seen = [];
+    const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && seen.push(e.target.id)));
+    io.observe(document.getElementById('i')); io.observe(document.getElementById('t'));
+  </script>`)}`);
+  await p2.waitForFunction(() => window.seen.length > 0);
+  eq(await p2.evaluate(() => window.seen), ['i'], '지연 로딩: 화면 아래 이미지는 미리 들어오고, 글은 화면에 들어올 때까지 기다린다');
   await b.close();
 }
 

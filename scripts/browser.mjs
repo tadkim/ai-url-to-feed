@@ -31,6 +31,29 @@ export function ignoreClosedCapture() {
   });
 }
 
+// 지연 로딩 이미지를 화면에 들어오기 전에(margin px 앞에서) 불러오게 한다.
+// 화면에 들어온 뒤에야 불러오는 사이트는 스크롤 직후 흐린 자리표시가 1~2초 보여 녹화가 버벅여 보인다 (stuckyi.studio 상세 — 2026-10-05).
+// 이미지·영상·배경 이미지 요소를 지켜보는 IntersectionObserver만 넓힌다. 글·카드가 화면에 들어올 때 나타나는 애니메이션은 그대로 둔다
+export function eagerImages(margin) {
+  const IO = window.IntersectionObserver;
+  if (!IO || IO.__eager) return;
+  const media = (el) => el instanceof Element && (/^(IMG|PICTURE|VIDEO|IFRAME|SOURCE)$/.test(el.tagName)
+    || [...el.attributes].some((a) => /^data-(src|srcset|bg|background|lazy|original)/.test(a.name)));
+  // class 문법을 쓰지 않는다: zone.js(Angular)가 for…in으로 메서드를 옮겨 감싸는데, class 메서드는 열거되지 않아 observe가 사라진다
+  function Eager(cb, opts = {}) {
+    const call = (entries) => cb(entries, this);
+    this.normal = new IO(call, opts);
+    this.wide = new IO(call, { ...opts, rootMargin: `${margin}px 0px` });
+    Object.assign(this, { root: this.normal.root, rootMargin: this.normal.rootMargin, thresholds: this.normal.thresholds });
+  }
+  Eager.prototype.observe = function (el) { (media(el) ? this.wide : this.normal).observe(el); };
+  Eager.prototype.unobserve = function (el) { this.normal.unobserve(el); this.wide.unobserve(el); };
+  Eager.prototype.disconnect = function () { this.normal.disconnect(); this.wide.disconnect(); };
+  Eager.prototype.takeRecords = function () { return [...this.normal.takeRecords(), ...this.wide.takeRecords()]; };
+  Eager.__eager = true;
+  window.IntersectionObserver = Eager;
+}
+
 // 컨텍스트에 언어와 쓰기 차단을 건다. counts: { seen, blocked }에 쓰기 요청 수를 센다.
 // 녹화 엔진은 컨텍스트를 직접 만들기 때문에 locale 옵션 대신 헤더와 navigator 값을 덮어쓴다
 export async function applyContext(context, rules, conf, counts = { seen: 0, blocked: 0 }) {
@@ -40,6 +63,7 @@ export async function applyContext(context, rules, conf, counts = { seen: 0, blo
     Object.defineProperty(navigator, 'language', { get: () => l });
     Object.defineProperty(navigator, 'languages', { get: () => [l, l.split('-')[0]] });
   }, locale);
+  if (rules.record.eager_images_px) await context.addInitScript(eagerImages, rules.record.eager_images_px);
   const reads = (rules.record.read_post ?? []).map((s) => new RegExp(s));   // 읽기 전용 POST: 세지 않고 통과
   const passes = (conf.allow_post ?? []).map((s) => new RegExp(s));
   if (conf.allow_writes) {

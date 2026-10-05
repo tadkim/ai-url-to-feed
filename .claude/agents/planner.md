@@ -101,6 +101,7 @@ export default {
   `await flickTo(card); await dwell(300); await tap(card.locator('button'));`
 - 같은 버튼을 빠르게 여러 번 누를 때는 첫 번만 `tap()`, 나머지는 `page.evaluate(() => window.__pressCursor?.()); await page.mouse.down(); await dwell(60); await page.mouse.up(); await dwell(260);`
 - 스크롤 뒤 지금 보이는 항목을 누를 때는 `tapVisible('.slot', { top: 140, bottom: 520 })`.
+- 지연 로딩 이미지는 하네스가 화면 4000px 앞에서 미리 불러오게 한다 (rules.yaml `record.eager_images_px`). 그래도 상세처럼 녹화 중에 새로 여는 페이지는 이미지가 다 들어온 뒤(화면 안 `img.complete`·투명도 1) 스크롤을 시작한다. 스크롤 직후 흐린 자리표시·빈 칸이 보이면 버벅이는 녹화다 (stuckyi.studio — 2026-10-05).
 - 선택자는 aria-label 우선, 클래스는 차선. explore.mjs로 실제 동작을 확인한 것만 쓴다.
 - 입력 필드는 `tap(input, { blur: false })` 뒤 `locator.pressSequentially(text, { delay: 60 })`.
 - `allow_writes`가 false인 프로젝트는 쓰기 요청이 막힌다. 제출 직전까지만 계획한다.
